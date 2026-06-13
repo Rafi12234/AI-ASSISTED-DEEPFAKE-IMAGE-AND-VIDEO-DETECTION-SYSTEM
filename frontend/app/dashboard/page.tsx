@@ -6,18 +6,27 @@ import { useEffect, useState } from "react";
 import { LogOut, Upload } from "lucide-react";
 
 import { clearAuth, getCurrentUser, getStoredToken } from "@/lib/auth";
+import { getMyUploads } from "@/lib/uploads";
 import type { AuthUser } from "@/types/auth";
+import type { UploadDetail } from "@/types/upload";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+
+function formatBytes(bytes: number) {
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(2)} MB`;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
 
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [uploads, setUploads] = useState<UploadDetail[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadUser() {
+    async function loadDashboard() {
       const token = getStoredToken();
 
       if (!token) {
@@ -28,6 +37,9 @@ export default function DashboardPage() {
       try {
         const currentUser = await getCurrentUser();
         setUser(currentUser);
+
+        const uploadList = await getMyUploads();
+        setUploads(uploadList);
       } catch {
         clearAuth();
         router.push("/login");
@@ -36,7 +48,7 @@ export default function DashboardPage() {
       }
     }
 
-    loadUser();
+    loadDashboard();
   }, [router]);
 
   function handleLogout() {
@@ -60,12 +72,8 @@ export default function DashboardPage() {
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
           <div>
             <h1 className="text-3xl font-bold">User Dashboard</h1>
-            <p className="mt-3 text-zinc-400">
-              Welcome, {user?.email}
-            </p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Role: {user?.role}
-            </p>
+            <p className="mt-3 text-zinc-400">Welcome, {user?.email}</p>
+            <p className="mt-1 text-sm text-zinc-500">Role: {user?.role}</p>
           </div>
 
           <div className="flex gap-3">
@@ -86,9 +94,43 @@ export default function DashboardPage() {
         <Card className="mt-10 border-white/10 bg-white/5 text-white">
           <CardContent className="p-8">
             <h2 className="text-xl font-semibold">Upload History</h2>
-            <p className="mt-3 text-zinc-400">
-              Upload history will be added after the upload API is completed.
-            </p>
+
+            {uploads.length === 0 ? (
+              <p className="mt-3 text-zinc-400">
+                You have not uploaded any media yet.
+              </p>
+            ) : (
+              <div className="mt-6 space-y-4">
+                {uploads.map((upload) => (
+                  <div
+                    key={upload.id}
+                    className="rounded-xl border border-white/10 bg-black/20 p-4"
+                  >
+                    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                      <div>
+                        <h3 className="font-semibold">
+                          {upload.original_filename}
+                        </h3>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          {upload.mime_type} • {formatBytes(upload.file_size_bytes)}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Uploaded:{" "}
+                          {new Date(upload.created_at).toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="secondary">{upload.file_type}</Badge>
+                        <Badge variant="secondary">
+                          {upload.upload_status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
