@@ -22,17 +22,25 @@ export default function HomePage() {
         </p>
 
         <div className="mt-10 flex flex-col gap-4 sm:flex-row">
-          <Button asChild size="lg">
-            <Link href="/upload">
-              <Upload className="mr-2 h-5 w-5" />
-              Start Analysis
-            </Link>
-          </Button>
+  <Button asChild size="lg">
+    <Link href="/upload">
+      <Upload className="mr-2 h-5 w-5" />
+      Start Analysis
+    </Link>
+  </Button>
 
-          <Button asChild size="lg" variant="outline">
-            <Link href="/dashboard">View Dashboard</Link>
-          </Button>
-        </div>
+  <Button asChild size="lg" variant="outline">
+    <Link href="/login">Login</Link>
+  </Button>
+
+  <Button asChild size="lg" variant="outline">
+    <Link href="/register">Register</Link>
+  </Button>
+
+  <Button asChild size="lg" variant="outline">
+    <Link href="/dashboard">Dashboard</Link>
+  </Button>
+</div>
 
         <div className="mt-16 grid w-full gap-6 md:grid-cols-3">
           <Card className="border-white/10 bg-white/5 text-white">
