@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import auth, health, storage_dev, uploads, validation_dev
+from app.routers import auth, health, queue_dev, storage_dev, uploads, validation_dev
 settings = get_settings()
 
 app = FastAPI(
@@ -52,5 +52,9 @@ app.include_router(
 )
 app.include_router(
     uploads.router,
+    prefix="/api",
+)
+app.include_router(
+    queue_dev.router,
     prefix="/api",
 )

@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.dependencies import get_current_user, get_db
 from app.models.core import AnalysisJob, MediaUpload, User
 from app.schemas.upload import UploadDetailResponse, UploadListResponse, UploadResponse
+from app.services.queue import enqueue_analysis_job
 from app.services.storage import delete_object, upload_bytes
 from app.validators.file_validator import validate_upload_file
 
@@ -74,6 +75,15 @@ async def upload_media(
 
         await db.refresh(media_upload)
         await db.refresh(analysis_job)
+
+        await enqueue_analysis_job(
+            job_id=analysis_job.id,
+            upload_id=media_upload.id,
+            user_id=current_user.id,
+            file_type=media_upload.file_type,
+            stored_path=media_upload.stored_path,
+            mime_type=media_upload.mime_type,
+        )
 
         return UploadResponse(
             upload_id=media_upload.id,
@@ -150,3 +160,4 @@ async def get_upload(
         )
 
     return UploadDetailResponse.model_validate(upload)
+
