@@ -1,58 +1,46 @@
-import axios from "axios";
-
-import { getStoredToken } from "@/lib/auth";
-import type { UploadListResponse, UploadResponse } from "@/types/upload";
+import type { MyUpload, UploadResponse } from "@/types/upload";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
 
-function getAuthHeaders() {
-  const token = getStoredToken();
-
-  if (!token) {
-    throw new Error("You must login before uploading media.");
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
-
 export async function uploadMediaFile(
   file: File,
-  onProgress?: (progress: number) => void
-) {
+  token: string
+): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await axios.post<UploadResponse>(
-    `${API_BASE_URL}/api/uploads`,
-    formData,
-    {
-      headers: {
-        ...getAuthHeaders(),
-      },
-      onUploadProgress: (event) => {
-        if (!event.total || !onProgress) return;
+  const response = await fetch(`${API_BASE_URL}/api/uploads`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
 
-        const progress = Math.round((event.loaded * 100) / event.total);
-        onProgress(progress);
-      },
-    }
-  );
+  const data = await response.json().catch(() => null);
 
-  return response.data;
+  if (!response.ok) {
+    throw new Error(data?.detail || "Upload failed.");
+  }
+
+  return data as UploadResponse;
 }
 
-export async function getMyUploads() {
-  const response = await axios.get<UploadListResponse>(
-    `${API_BASE_URL}/api/uploads`,
-    {
-      headers: {
-        ...getAuthHeaders(),
-      },
-    }
-  );
+export async function getMyUploads(token: string): Promise<MyUpload[]> {
+  const response = await fetch(`${API_BASE_URL}/api/uploads`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
 
-  return response.data.uploads;
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.detail || "Failed to load uploads.");
+  }
+
+  return data as MyUpload[];
 }
