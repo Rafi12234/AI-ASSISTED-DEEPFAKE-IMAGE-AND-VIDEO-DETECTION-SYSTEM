@@ -12,7 +12,8 @@ export type UploadResponse = {
 };
 
 export type MyUpload = {
-  upload_id: string;
+  id?: string;
+  upload_id?: string;
   job_id?: string | null;
   original_filename: string;
   file_type: string;

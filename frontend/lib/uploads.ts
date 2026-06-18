@@ -42,5 +42,17 @@ export async function getMyUploads(token: string): Promise<MyUpload[]> {
     throw new Error(data?.detail || "Failed to load uploads.");
   }
 
-  return data as MyUpload[];
+  if (Array.isArray(data)) {
+    return data as MyUpload[];
+  }
+
+  if (Array.isArray(data?.items)) {
+    return data.items as MyUpload[];
+  }
+
+  if (Array.isArray(data?.uploads)) {
+    return data.uploads as MyUpload[];
+  }
+
+  return [];
 }
