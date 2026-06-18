@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -10,6 +10,7 @@ import {
   Brain,
   CheckCircle2,
   Clock3,
+  Download,
   FileImage,
   RefreshCw,
   ShieldAlert,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { getResultByJobId, getResultByUploadId } from "@/lib/results";
+import { downloadResultReportPdf } from "@/lib/reports";
 import type { AnalysisResultResponse } from "@/types/result";
 
 const TOKEN_KEY = "deepfake_access_token";
@@ -121,7 +123,9 @@ export default function ResultClient() {
   const [data, setData] = useState<AnalysisResultResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pageError, setPageError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const riskStyle = useMemo(() => {
     return getRiskStyle(data?.result?.risk_level);
@@ -129,14 +133,57 @@ export default function ResultClient() {
 
   const RiskIcon = riskStyle.icon;
 
-  async function loadResult(isRefresh = false) {
-    try {
-      setError("");
+  const loadResult = useCallback(
+    async (isRefresh = false) => {
+      try {
+        setPageError("");
+        setActionError("");
 
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
+        if (isRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
+        const token = localStorage.getItem(TOKEN_KEY);
+
+        if (!token) {
+          throw new Error("You are not logged in. Please login first.");
+        }
+
+        if (!jobId && !uploadId) {
+          throw new Error("No job_id or upload_id found in the URL.");
+        }
+
+        const result = jobId
+          ? await getResultByJobId(jobId, token)
+          : await getResultByUploadId(uploadId as string, token);
+
+        setData(result);
+      } catch (err) {
+        setPageError(
+          err instanceof Error ? err.message : "Something went wrong."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [jobId, uploadId]
+  );
+
+  async function handleDownloadPdf() {
+    try {
+      setActionError("");
+
+      if (!data?.job?.job_id) {
+        throw new Error("Job ID is missing.");
+      }
+
+      if (!data.result) {
+        throw new Error(
+          "PDF report is available only after analysis is completed."
+        );
       }
 
       const token = localStorage.getItem(TOKEN_KEY);
@@ -145,33 +192,25 @@ export default function ResultClient() {
         throw new Error("You are not logged in. Please login first.");
       }
 
-      if (!jobId && !uploadId) {
-        throw new Error("No job_id or upload_id found in the URL.");
-      }
+      setDownloadingPdf(true);
 
-      const result = jobId
-        ? await getResultByJobId(jobId, token)
-        : await getResultByUploadId(uploadId as string, token);
-
-      setData(result);
+      await downloadResultReportPdf(data.job.job_id, token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setActionError(err instanceof Error ? err.message : "PDF download failed.");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setDownloadingPdf(false);
     }
   }
 
-useEffect(() => {
-  const timer = window.setTimeout(() => {
-    loadResult();
-  }, 0);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadResult(false);
+    }, 0);
 
-  return () => {
-    window.clearTimeout(timer);
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [jobId, uploadId]);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [loadResult]);
 
   if (loading) {
     return (
@@ -188,7 +227,7 @@ useEffect(() => {
     );
   }
 
-  if (error) {
+  if (pageError) {
     return (
       <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
         <div className="mx-auto max-w-4xl">
@@ -204,11 +243,11 @@ useEffect(() => {
             <h1 className="text-2xl font-bold text-red-200">
               Could not load result
             </h1>
-            <p className="mt-3 text-red-100">{error}</p>
+            <p className="mt-3 text-red-100">{pageError}</p>
 
             <div className="mt-6 flex flex-wrap gap-3">
               <button
-                onClick={() => loadResult(true)}
+                onClick={() => void loadResult(true)}
                 className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-slate-200"
               >
                 Try Again
@@ -253,17 +292,34 @@ useEffect(() => {
             </p>
           </div>
 
-          <button
-            onClick={() => loadResult(true)}
-            disabled={refreshing}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => void handleDownloadPdf()}
+              disabled={downloadingPdf || !data.result}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Download className="h-4 w-4" />
+              {downloadingPdf ? "Downloading..." : "Download PDF"}
+            </button>
+
+            <button
+              onClick={() => void loadResult(true)}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </button>
+          </div>
         </div>
+
+        {actionError && (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+            {actionError}
+          </div>
+        )}
 
         <section className="grid gap-6 lg:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 lg:col-span-2">
@@ -383,7 +439,9 @@ useEffect(() => {
             <div className="mt-5 space-y-3 text-sm">
               <div>
                 <p className="text-slate-500">Queued At</p>
-                <p className="text-slate-200">{formatDate(data.job.queued_at)}</p>
+                <p className="text-slate-200">
+                  {formatDate(data.job.queued_at)}
+                </p>
               </div>
 
               <div>
@@ -538,7 +596,9 @@ useEffect(() => {
           <div className="mt-5 grid gap-4 text-sm md:grid-cols-2">
             <div>
               <p className="text-slate-500">Job ID</p>
-              <p className="mt-1 break-all text-slate-300">{data.job.job_id}</p>
+              <p className="mt-1 break-all text-slate-300">
+                {data.job.job_id}
+              </p>
             </div>
 
             <div>
