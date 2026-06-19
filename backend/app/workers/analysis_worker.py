@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.models.core import AnalysisJob
+from app.services.ai_service_client import analyze_image_with_ai_service
 from app.services.mock_analysis import build_mock_analysis
 from app.services.queue import get_analysis_queue_length, pop_analysis_job
 
@@ -22,55 +23,67 @@ def json_dumps(value: Any) -> str:
     return json.dumps(value, default=str)
 
 
-async def run_mock_analysis(payload: dict[str, Any]) -> dict[str, Any]:
-    print("Running mock analysis...")
-    print(f"File type: {payload.get('file_type')}")
-    print(f"Stored path: {payload.get('stored_path')}")
-
-    await asyncio.sleep(3)
-
-    return build_mock_analysis(payload)
+def get_payload_filename(payload: dict[str, Any]) -> str:
+    stored_path = str(payload.get("stored_path") or "uploaded-file")
+    return stored_path.split("/")[-1] or "uploaded-file"
 
 
-async def mark_job_processing(db: AsyncSession, job: AnalysisJob) -> None:
+async def run_analysis(payload: dict[str, Any]) -> dict[str, Any]:
+    file_type = str(payload.get("file_type") or "").lower()
+
+    if file_type == "image":
+        print("Running AI service image analysis...")
+
+        return await analyze_image_with_ai_service(
+            stored_path=str(payload["stored_path"]),
+            filename=get_payload_filename(payload),
+            mime_type=str(payload.get("mime_type") or "image/jpeg"),
+        )
+
+    print("Video analysis is not connected yet. Using mock fallback for non-image file.")
+
+    return build_mock_analysis(
+        file_type=file_type or "unknown",
+        stored_path=str(payload.get("stored_path") or ""),
+    )
+
+
+async def mark_job_processing(
+    db: AsyncSession,
+    job: AnalysisJob,
+) -> AnalysisJob:
     job.status = "processing"
     job.started_at = utc_now()
     job.error_message = None
-
-    existing_metadata = job.job_metadata or {}
     job.job_metadata = {
-        **existing_metadata,
-        "worker": {
-            "status": "processing",
-            "started_at": job.started_at.isoformat(),
-        },
+        "worker_status": "processing",
+        "worker_started_at": utc_now().isoformat(),
     }
 
     await db.commit()
     await db.refresh(job)
+
+    return job
 
 
 async def mark_job_completed(
     db: AsyncSession,
     job: AnalysisJob,
     result_metadata: dict[str, Any],
-) -> None:
+) -> AnalysisJob:
     job.status = "completed"
     job.completed_at = utc_now()
     job.error_message = None
-
-    existing_metadata = job.job_metadata or {}
     job.job_metadata = {
-        **existing_metadata,
-        "worker": {
-            "status": "completed",
-            "completed_at": job.completed_at.isoformat(),
-            "result": result_metadata,
-        },
+        "worker_status": "completed",
+        "worker_completed_at": utc_now().isoformat(),
+        "result": result_metadata,
     }
 
     await db.commit()
     await db.refresh(job)
+
+    return job
 
 
 async def mark_job_failed(
@@ -84,24 +97,17 @@ async def mark_job_failed(
     job = result.scalar_one_or_none()
 
     if job is None:
-        print(f"Could not mark failed. Job not found: {job_id}")
         return
 
     job.status = "failed"
-    job.error_message = error_message[:1000]
-
-    existing_metadata = job.job_metadata or {}
+    job.error_message = error_message
     job.job_metadata = {
-        **existing_metadata,
-        "worker": {
-            "status": "failed",
-            "failed_at": utc_now().isoformat(),
-            "error": error_message[:1000],
-        },
+        "worker_status": "failed",
+        "worker_failed_at": utc_now().isoformat(),
+        "error": error_message,
     }
 
     await db.commit()
-    await db.refresh(job)
 
 
 async def existing_analysis_result_id(
@@ -117,7 +123,9 @@ async def existing_analysis_result_id(
             LIMIT 1
             """
         ),
-        {"job_id": job_id},
+        {
+            "job_id": job_id,
+        },
     )
 
     row = result.first()
@@ -125,43 +133,40 @@ async def existing_analysis_result_id(
     if row is None:
         return None
 
-    return row[0]
+    return row.id
 
 
 async def create_analysis_result(
     db: AsyncSession,
     job: AnalysisJob,
-    mock_result: dict[str, Any],
+    analysis_result: dict[str, Any],
 ) -> uuid.UUID:
-    signals_summary = {
-        "summary": (
-            f"Mock analysis completed with {len(mock_result['predictions'])} model predictions "
-            f"and {len(mock_result['forensic_signals'])} forensic signals."
-        ),
-        "prediction_count": len(mock_result["predictions"]),
-        "forensic_signal_count": len(mock_result["forensic_signals"]),
-        "signals": [
-            {
-                "signal_type": signal["signal_type"],
-                "signal_name": signal["signal_name"],
-                "score": signal["score"],
-                "severity": signal["severity"],
-                "description": signal["description"],
-            }
-            for signal in mock_result["forensic_signals"]
-        ],
-    }
+    signals = analysis_result.get("forensic_signals", [])
+    predictions = analysis_result.get("model_predictions", [])
 
-    model_versions = {
-        "engine": "mock-analysis-v1",
-        "models": [
-            {
-                "model_name": prediction["model_name"],
-                "model_version": prediction["model_version"],
-            }
-            for prediction in mock_result["predictions"]
-        ],
-    }
+    signals_summary = analysis_result.get(
+        "signals_summary",
+        {
+            "summary": "Analysis completed.",
+            "prediction_count": len(predictions),
+            "forensic_signal_count": len(signals),
+            "signals": signals,
+        },
+    )
+
+    model_versions = analysis_result.get(
+        "model_versions",
+        {
+            "engine": analysis_result.get("engine", "unknown-engine"),
+            "models": [
+                {
+                    "model_name": prediction.get("model_name", "unknown-model"),
+                    "model_version": prediction.get("model_version", "unknown-version"),
+                }
+                for prediction in predictions
+            ],
+        },
+    )
 
     result = await db.execute(
         text(
@@ -194,13 +199,13 @@ async def create_analysis_result(
         {
             "media_upload_id": job.media_upload_id,
             "analysis_job_id": job.id,
-            "final_score": float(mock_result["final_score"]),
-            "risk_level": mock_result["risk_level"],
-            "confidence": float(mock_result["confidence"]),
-            "explanation": mock_result["summary"],
+            "final_score": float(analysis_result["final_score"]),
+            "risk_level": str(analysis_result["risk_level"]),
+            "confidence": float(analysis_result.get("confidence", analysis_result["final_score"])),
+            "explanation": str(analysis_result.get("explanation", "Analysis completed.")),
             "signals_summary": json_dumps(signals_summary),
             "model_versions": json_dumps(model_versions),
-            "processing_time_ms": 3000,
+            "processing_time_ms": int(analysis_result.get("processing_time_ms") or 0),
         },
     )
 
@@ -210,11 +215,18 @@ async def create_analysis_result(
 async def create_model_predictions(
     db: AsyncSession,
     analysis_result_id: uuid.UUID,
-    mock_result: dict[str, Any],
+    analysis_result: dict[str, Any],
 ) -> None:
-    for prediction in mock_result["predictions"]:
-        raw_score = float(prediction["score"])
-        calibrated_score = raw_score
+    predictions = analysis_result.get("model_predictions", [])
+
+    for prediction in predictions:
+        raw_score = float(
+            prediction.get("raw_score", prediction.get("score", 0.0))
+        )
+
+        calibrated_score = float(
+            prediction.get("calibrated_score", raw_score)
+        )
 
         await db.execute(
             text(
@@ -243,13 +255,18 @@ async def create_model_predictions(
             ),
             {
                 "analysis_result_id": analysis_result_id,
-                "model_name": prediction["model_name"],
-                "model_version": prediction["model_version"],
+                "model_name": str(prediction.get("model_name", "unknown-model")),
+                "model_version": str(prediction.get("model_version", "unknown-version")),
                 "raw_score": raw_score,
                 "calibrated_score": calibrated_score,
-                "prediction_label": prediction["label"],
-                "target_region": "global",
-                "inference_time_ms": 1000,
+                "prediction_label": str(
+                    prediction.get(
+                        "prediction_label",
+                        analysis_result.get("risk_level", "uncertain"),
+                    )
+                ),
+                "target_region": prediction.get("target_region", "global"),
+                "inference_time_ms": int(prediction.get("inference_time_ms") or 0),
             },
         )
 
@@ -257,14 +274,27 @@ async def create_model_predictions(
 async def create_forensic_signals(
     db: AsyncSession,
     analysis_result_id: uuid.UUID,
-    mock_result: dict[str, Any],
+    analysis_result: dict[str, Any],
 ) -> None:
-    for signal in mock_result["forensic_signals"]:
+    signals = analysis_result.get("forensic_signals", [])
+
+    for signal in signals:
+        signal_name = str(
+            signal.get("signal_name")
+            or signal.get("signal_value")
+            or signal.get("signal_type")
+            or "unknown_signal"
+        )
+
+        signal_score = float(
+            signal.get("score", signal.get("risk_contribution", 0.0))
+        )
+
         details = {
-            "signal_name": signal["signal_name"],
-            "severity": signal["severity"],
-            "description": signal["description"],
-            "raw_data": signal["raw_data"],
+            "signal_name": signal_name,
+            "severity": signal.get("severity", "unknown"),
+            "description": signal.get("description", "No description available."),
+            "raw_data": signal.get("raw_data", {}),
         }
 
         await db.execute(
@@ -288,9 +318,9 @@ async def create_forensic_signals(
             ),
             {
                 "analysis_result_id": analysis_result_id,
-                "signal_type": signal["signal_type"],
-                "signal_value": signal["signal_name"],
-                "risk_contribution": float(signal["score"]),
+                "signal_type": str(signal.get("signal_type", "unknown")),
+                "signal_value": signal_name,
+                "risk_contribution": signal_score,
                 "details": json_dumps(details),
             },
         )
@@ -300,112 +330,110 @@ async def create_analysis_records(
     db: AsyncSession,
     job: AnalysisJob,
     payload: dict[str, Any],
-    mock_result: dict[str, Any],
+    analysis_result: dict[str, Any],
 ) -> dict[str, Any]:
-    existing_result = await existing_analysis_result_id(db, job.id)
+    old_result_id = await existing_analysis_result_id(
+        db=db,
+        job_id=job.id,
+    )
 
-    if existing_result is not None:
-        print(f"Analysis result already exists for job: {job.id}")
-
+    if old_result_id is not None:
         return {
-            "analysis_result_id": str(existing_result),
-            "final_score": mock_result["final_score"],
-            "risk_level": mock_result["risk_level"],
-            "message": "Existing analysis result reused.",
+            "analysis_result_id": str(old_result_id),
+            "already_exists": True,
         }
 
     analysis_result_id = await create_analysis_result(
         db=db,
         job=job,
-        mock_result=mock_result,
+        analysis_result=analysis_result,
     )
 
     await create_model_predictions(
         db=db,
         analysis_result_id=analysis_result_id,
-        mock_result=mock_result,
+        analysis_result=analysis_result,
     )
 
     await create_forensic_signals(
         db=db,
         analysis_result_id=analysis_result_id,
-        mock_result=mock_result,
+        analysis_result=analysis_result,
     )
 
     await db.commit()
 
     return {
         "analysis_result_id": str(analysis_result_id),
-        "final_score": mock_result["final_score"],
-        "risk_level": mock_result["risk_level"],
-        "prediction_count": len(mock_result["predictions"]),
-        "forensic_signal_count": len(mock_result["forensic_signals"]),
-        "source_file_type": payload.get("file_type"),
+        "already_exists": False,
+        "engine": analysis_result.get("engine", "unknown-engine"),
+        "final_score": analysis_result.get("final_score"),
+        "risk_level": analysis_result.get("risk_level"),
+        "upload_id": str(payload.get("upload_id")),
     }
 
 
 async def process_queue_payload(payload: dict[str, Any]) -> None:
-    job_id_raw = payload.get("job_id")
-
-    if not job_id_raw:
-        print("Skipped queue item because job_id is missing.")
-        return
-
-    try:
-        job_id = uuid.UUID(str(job_id_raw))
-    except ValueError:
-        print(f"Skipped queue item because job_id is invalid: {job_id_raw}")
-        return
+    job_id = uuid.UUID(str(payload["job_id"]))
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(AnalysisJob).where(AnalysisJob.id == job_id)
-        )
-        job = result.scalar_one_or_none()
-
-        if job is None:
-            print(f"Skipped queue item. Job not found in database: {job_id}")
-            return
-
-        if job.status == "completed":
-            print(f"Skipped job because it is already completed: {job_id}")
-            return
-
         try:
+            result = await db.execute(
+                select(AnalysisJob).where(AnalysisJob.id == job_id)
+            )
+            job = result.scalar_one_or_none()
+
+            if job is None:
+                print(f"Job not found in database: {job_id}")
+                return
+
+            if job.status == "completed":
+                print(f"Job already completed: {job_id}")
+                return
+
             print(f"Processing job: {job_id}")
 
-            await mark_job_processing(db, job)
+            job = await mark_job_processing(
+                db=db,
+                job=job,
+            )
 
-            mock_result = await run_mock_analysis(payload)
+            analysis_result = await run_analysis(payload)
 
             result_metadata = await create_analysis_records(
                 db=db,
                 job=job,
                 payload=payload,
-                mock_result=mock_result,
+                analysis_result=analysis_result,
             )
 
-            await mark_job_completed(db, job, result_metadata)
+            await mark_job_completed(
+                db=db,
+                job=job,
+                result_metadata=result_metadata,
+            )
 
             print(f"Completed job: {job_id}")
-            print(f"Final score: {result_metadata.get('final_score')}")
-            print(f"Risk level: {result_metadata.get('risk_level')}")
+            print(f"Engine: {analysis_result.get('engine')}")
+            print(f"Final score: {analysis_result.get('final_score')}")
+            print(f"Risk level: {analysis_result.get('risk_level')}")
 
         except Exception as exc:
             await db.rollback()
 
-            try:
-                await mark_job_failed(db, job_id, str(exc))
-            except Exception as fail_exc:
-                await db.rollback()
-                print(f"Could not mark job as failed: {job_id}")
-                print(str(fail_exc))
+            error_message = str(exc)
+
+            await mark_job_failed(
+                db=db,
+                job_id=job_id,
+                error_message=error_message,
+            )
 
             print(f"Failed job: {job_id}")
-            print(str(exc))
+            print(f"Error: {error_message}")
 
 
-async def run_worker_loop(poll_seconds: int = 3) -> None:
+async def run_worker_loop(poll_interval_seconds: int) -> None:
     print("AI Worker Skeleton started.")
     print("Waiting for Redis jobs...")
 
@@ -415,7 +443,7 @@ async def run_worker_loop(poll_seconds: int = 3) -> None:
         if payload is None:
             queue_length = await get_analysis_queue_length()
             print(f"No job found. Queue length: {queue_length}. Waiting...")
-            await asyncio.sleep(poll_seconds)
+            await asyncio.sleep(poll_interval_seconds)
             continue
 
         await process_queue_payload(payload)
@@ -427,26 +455,24 @@ async def run_once() -> None:
     payload = await pop_analysis_job()
 
     if payload is None:
-        print("No queued job found.")
+        print("No job found.")
         return
 
     await process_queue_payload(payload)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Deepfake analysis worker skeleton")
-
+    parser = argparse.ArgumentParser(description="Run analysis worker.")
     parser.add_argument(
         "--once",
         action="store_true",
-        help="Process one job and exit.",
+        help="Process one queued job and exit.",
     )
-
     parser.add_argument(
-        "--poll-seconds",
+        "--poll-interval",
         type=int,
         default=3,
-        help="Seconds to wait between queue checks.",
+        help="Polling interval in seconds.",
     )
 
     args = parser.parse_args()
@@ -454,9 +480,12 @@ def main() -> None:
     if args.once:
         asyncio.run(run_once())
     else:
-        asyncio.run(run_worker_loop(poll_seconds=args.poll_seconds))
+        asyncio.run(
+            run_worker_loop(
+                poll_interval_seconds=args.poll_interval,
+            )
+        )
 
 
 if __name__ == "__main__":
     main()
-

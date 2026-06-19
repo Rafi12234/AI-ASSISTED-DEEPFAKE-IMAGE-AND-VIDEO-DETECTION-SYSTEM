@@ -4,7 +4,8 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-ROOT_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+ROOT_DIR = Path(__file__).resolve().parents[2]
+ENV_FILE = ROOT_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -13,16 +14,15 @@ class Settings(BaseSettings):
 
     database_url: str
 
-    redis_password: str
     redis_url: str
 
     minio_access_key: str
     minio_secret_key: str
-    minio_endpoint: str
-    minio_public_endpoint: str
-    minio_bucket_raw: str
-    minio_bucket_processed: str
-    minio_bucket_reports: str
+    minio_endpoint: str = "localhost:9000"
+    minio_public_endpoint: str = "localhost:9000"
+    minio_bucket_raw: str = "raw-uploads"
+    minio_bucket_processed: str = "processed-files"
+    minio_bucket_reports: str = "analysis-reports"
 
     jwt_secret: str
     jwt_algorithm: str = "HS256"
@@ -38,13 +38,19 @@ class Settings(BaseSettings):
     max_frames_per_video: int = 300
     frame_extraction_strategy: str = "adaptive"
 
+    ai_service_url: str = "http://127.0.0.1:8010"
+
     model_config = SettingsConfigDict(
-        env_file=str(ROOT_ENV_FILE),
+        env_file=str(ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
+        case_sensitive=False,
     )
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+settings = get_settings()
