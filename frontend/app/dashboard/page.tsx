@@ -225,6 +225,12 @@ export default function DashboardPage() {
               />
               Refresh
             </button>
+            <Link
+  href="/system"
+  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800"
+>
+  System Health
+</Link>
 
             <Link
               href="/upload"
