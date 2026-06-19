@@ -27,8 +27,9 @@ def read_raw_file_from_minio(stored_path: str) -> bytes:
         response.release_conn()
 
 
-async def analyze_image_with_ai_service(
+async def send_file_to_ai_service(
     *,
+    endpoint_path: str,
     stored_path: str,
     filename: str,
     mime_type: str,
@@ -38,7 +39,7 @@ async def analyze_image_with_ai_service(
     if not file_bytes:
         raise RuntimeError("Stored file is empty.")
 
-    endpoint = f"{normalize_ai_service_url()}/analyze/image"
+    endpoint = f"{normalize_ai_service_url()}{endpoint_path}"
 
     files = {
         "file": (
@@ -48,7 +49,7 @@ async def analyze_image_with_ai_service(
         )
     }
 
-    async with httpx.AsyncClient(timeout=90.0) as client:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(
             endpoint,
             files=files,
@@ -65,3 +66,31 @@ async def analyze_image_with_ai_service(
         raise RuntimeError("AI service response is missing required result fields.")
 
     return data
+
+
+async def analyze_image_with_ai_service(
+    *,
+    stored_path: str,
+    filename: str,
+    mime_type: str,
+) -> dict[str, Any]:
+    return await send_file_to_ai_service(
+        endpoint_path="/analyze/image",
+        stored_path=stored_path,
+        filename=filename,
+        mime_type=mime_type,
+    )
+
+
+async def analyze_video_with_ai_service(
+    *,
+    stored_path: str,
+    filename: str,
+    mime_type: str,
+) -> dict[str, Any]:
+    return await send_file_to_ai_service(
+        endpoint_path="/analyze/video",
+        stored_path=stored_path,
+        filename=filename,
+        mime_type=mime_type,
+    )

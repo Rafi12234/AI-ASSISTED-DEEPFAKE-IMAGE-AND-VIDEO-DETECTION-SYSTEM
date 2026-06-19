@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.models.core import AnalysisJob
-from app.services.ai_service_client import analyze_image_with_ai_service
+from app.services.ai_service_client import (
+    analyze_image_with_ai_service,
+    analyze_video_with_ai_service,
+)
 from app.services.mock_analysis import build_mock_analysis
 from app.services.queue import get_analysis_queue_length, pop_analysis_job
 
@@ -40,7 +43,16 @@ async def run_analysis(payload: dict[str, Any]) -> dict[str, Any]:
             mime_type=str(payload.get("mime_type") or "image/jpeg"),
         )
 
-    print("Video analysis is not connected yet. Using mock fallback for non-image file.")
+    if file_type == "video":
+        print("Running AI service video analysis...")
+
+        return await analyze_video_with_ai_service(
+            stored_path=str(payload["stored_path"]),
+            filename=get_payload_filename(payload),
+            mime_type=str(payload.get("mime_type") or "video/mp4"),
+        )
+
+    print("Unknown media type. Using mock fallback.")
 
     return build_mock_analysis(
         file_type=file_type or "unknown",
