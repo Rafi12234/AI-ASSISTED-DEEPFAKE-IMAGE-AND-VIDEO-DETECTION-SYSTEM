@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -9,6 +9,7 @@ import {
   Clock3,
   FileImage,
   RefreshCw,
+  Search,
   ShieldCheck,
 } from "lucide-react";
 
@@ -67,9 +68,25 @@ function getStatusStyle(status?: string | null) {
 export default function AdminPage() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [jobs, setJobs] = useState<AdminJobItem[]>([]);
+
+  const [searchText, setSearchText] = useState("");
+  const [jobStatus, setJobStatus] = useState("all");
+  const [riskLevel, setRiskLevel] = useState("all");
+  const [mediaType, setMediaType] = useState("all");
+  const [limit, setLimit] = useState(100);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+
+  const filteredSummary = useMemo(() => {
+    return {
+      total: jobs.length,
+      completed: jobs.filter((job) => job.job_status === "completed").length,
+      queued: jobs.filter((job) => job.job_status === "queued").length,
+      highRisk: jobs.filter((job) => job.risk_level === "high_risk").length,
+    };
+  }, [jobs]);
 
   async function loadAdmin(isRefresh = false) {
     try {
@@ -89,7 +106,13 @@ export default function AdminPage() {
 
       const [overviewData, jobItems] = await Promise.all([
         getAdminOverview(token),
-        getAdminJobs(token),
+        getAdminJobs(token, {
+          search: searchText,
+          jobStatus,
+          riskLevel,
+          mediaType,
+          limit,
+        }),
       ]);
 
       setOverview(overviewData);
@@ -102,9 +125,17 @@ export default function AdminPage() {
     }
   }
 
+  function resetFilters() {
+    setSearchText("");
+    setJobStatus("all");
+    setRiskLevel("all");
+    setMediaType("all");
+    setLimit(100);
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      loadAdmin();
+      void loadAdmin(false);
     }, 0);
 
     return () => {
@@ -139,7 +170,7 @@ export default function AdminPage() {
               <p className="mt-3 text-red-100">{error}</p>
               <div className="mt-6 flex gap-3">
                 <button
-                  onClick={() => loadAdmin(true)}
+                  onClick={() => void loadAdmin(true)}
                   className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-950 hover:bg-slate-200"
                 >
                   Try Again
@@ -181,12 +212,12 @@ export default function AdminPage() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Monitor uploads, jobs, and analysis results.
+              Search, filter, and monitor uploads, jobs, and analysis results.
             </p>
           </div>
 
           <button
-            onClick={() => loadAdmin(true)}
+            onClick={() => void loadAdmin(true)}
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
           >
@@ -227,10 +258,135 @@ export default function AdminPage() {
           </div>
         </section>
 
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className="flex items-center gap-3">
+            <Search className="h-6 w-6 text-slate-300" />
+            <h2 className="text-xl font-bold">Filters</h2>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-5">
+            <div className="md:col-span-2">
+              <label className="text-sm text-slate-400">Search</label>
+              <input
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="filename, email, job id, upload id"
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-slate-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-400">Job Status</label>
+              <select
+                value={jobStatus}
+                onChange={(event) => setJobStatus(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-slate-500"
+              >
+                <option value="all">All</option>
+                <option value="queued">Queued</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-400">Risk Level</label>
+              <select
+                value={riskLevel}
+                onChange={(event) => setRiskLevel(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-slate-500"
+              >
+                <option value="all">All</option>
+                <option value="likely_authentic">Likely Authentic</option>
+                <option value="uncertain">Uncertain</option>
+                <option value="suspicious">Suspicious</option>
+                <option value="high_risk">High Risk</option>
+                <option value="not_available">Not Available</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-400">Media Type</label>
+              <select
+                value={mediaType}
+                onChange={(event) => setMediaType(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-slate-500"
+              >
+                <option value="all">All</option>
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div>
+              <label className="text-sm text-slate-400">Limit</label>
+              <select
+                value={limit}
+                onChange={(event) => setLimit(Number(event.target.value))}
+                className="ml-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none focus:border-slate-500"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={300}>300</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => void loadAdmin(true)}
+              disabled={refreshing}
+              className="rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-slate-200 disabled:opacity-60"
+            >
+              Apply Filters
+            </button>
+
+            <button
+              onClick={resetFilters}
+              className="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-bold text-slate-200 hover:bg-slate-800"
+            >
+              Reset
+            </button>
+          </div>
+        </section>
+
+        <section className="mb-6 grid gap-6 md:grid-cols-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <p className="text-sm text-slate-400">Filtered Results</p>
+            <p className="mt-2 text-3xl font-extrabold">
+              {filteredSummary.total}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <p className="text-sm text-slate-400">Filtered Completed</p>
+            <p className="mt-2 text-3xl font-extrabold">
+              {filteredSummary.completed}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <p className="text-sm text-slate-400">Filtered Queued</p>
+            <p className="mt-2 text-3xl font-extrabold">
+              {filteredSummary.queued}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <p className="text-sm text-slate-400">Filtered High Risk</p>
+            <p className="mt-2 text-3xl font-extrabold">
+              {filteredSummary.highRisk}
+            </p>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <div className="flex items-center gap-3">
             <BarChart3 className="h-6 w-6 text-slate-300" />
-            <h2 className="text-xl font-bold">Latest Analysis Jobs</h2>
+            <h2 className="text-xl font-bold">Analysis Jobs</h2>
           </div>
 
           <div className="mt-6 overflow-x-auto">
@@ -255,7 +411,7 @@ export default function AdminPage() {
                       className="rounded-xl bg-slate-950 px-4 py-8 text-center text-slate-400"
                     >
                       <Clock3 className="mx-auto mb-3 h-8 w-8 text-slate-600" />
-                      No jobs found.
+                      No jobs found for the selected filters.
                     </td>
                   </tr>
                 ) : (
