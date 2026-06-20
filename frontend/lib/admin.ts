@@ -62,5 +62,11 @@ export async function getAdminJobs(
   const query = params.toString();
   const endpoint = query ? `/api/admin/jobs?${query}` : "/api/admin/jobs";
 
-  return adminRequest<AdminJobItem[]>(endpoint, token);
+  const result = await adminRequest<AdminJobItem[] | null>(endpoint, token);
+
+  if (!Array.isArray(result)) {
+    return [];
+  }
+
+  return result;
 }

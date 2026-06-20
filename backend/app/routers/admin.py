@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
 from app.models.core import User
-
+from app.services.queue import enqueue_analysis_job
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -215,3 +215,94 @@ async def list_admin_jobs(
     )
 
     return [row_to_dict(row) for row in result.all()]
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_admin_job(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    require_admin(current_user)
+
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                aj.id AS job_id,
+                aj.status AS job_status,
+
+                mu.id AS upload_id,
+                mu.user_id,
+                mu.file_type,
+                mu.stored_path,
+                mu.mime_type
+            FROM analysis_jobs aj
+            INNER JOIN media_uploads mu ON mu.id = aj.media_upload_id
+            WHERE aj.id = :job_id
+              AND mu.is_deleted = false
+            LIMIT 1
+            """
+        ),
+        {
+            "job_id": job_id,
+        },
+    )
+
+    row = result.first()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found.",
+        )
+
+    job = row._mapping
+
+    if job["job_status"] == "processing":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This job is already processing.",
+        )
+
+    if job["job_status"] == "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This job is already completed. Completed jobs cannot be retried.",
+        )
+
+    await db.execute(
+        text(
+            """
+            UPDATE analysis_jobs
+            SET
+                status = 'queued',
+                queued_at = NOW(),
+                started_at = NULL,
+                completed_at = NULL,
+                error_message = NULL
+            WHERE id = :job_id
+            """
+        ),
+        {
+            "job_id": job["job_id"],
+        },
+    )
+
+    await db.commit()
+
+    await enqueue_analysis_job(
+        job_id=job["job_id"],
+        upload_id=job["upload_id"],
+        user_id=job["user_id"],
+        file_type=job["file_type"],
+        stored_path=job["stored_path"],
+        mime_type=job["mime_type"],
+    )
+
+    return {
+        "message": "Job has been requeued successfully.",
+        "job_id": str(job["job_id"]),
+        "upload_id": str(job["upload_id"]),
+        "status": "queued",
+    }

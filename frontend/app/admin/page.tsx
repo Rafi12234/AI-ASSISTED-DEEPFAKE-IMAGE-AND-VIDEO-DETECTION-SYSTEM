@@ -116,7 +116,7 @@ export default function AdminPage() {
       ]);
 
       setOverview(overviewData);
-      setJobs(jobItems);
+      setJobs(Array.isArray(jobItems) ? jobItems : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load admin.");
     } finally {
