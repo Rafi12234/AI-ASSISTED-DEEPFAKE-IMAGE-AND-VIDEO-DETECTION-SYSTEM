@@ -10,6 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -187,10 +188,10 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=0.6 * inch,
-        leftMargin=0.6 * inch,
-        topMargin=0.6 * inch,
-        bottomMargin=0.6 * inch,
+        rightMargin=0.55 * inch,
+        leftMargin=0.55 * inch,
+        topMargin=0.55 * inch,
+        bottomMargin=0.55 * inch,
     )
 
     styles = getSampleStyleSheet()
@@ -200,7 +201,7 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
         parent=styles["Title"],
         fontSize=20,
         leading=26,
-        spaceAfter=16,
+        spaceAfter=14,
     )
 
     heading_style = ParagraphStyle(
@@ -208,16 +209,94 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
         parent=styles["Heading2"],
         fontSize=14,
         leading=18,
-        spaceBefore=14,
+        spaceBefore=12,
         spaceAfter=8,
     )
 
     normal_style = ParagraphStyle(
         "CustomNormal",
         parent=styles["BodyText"],
-        fontSize=9,
-        leading=13,
+        fontSize=8,
+        leading=11,
     )
+
+    small_style = ParagraphStyle(
+        "CustomSmall",
+        parent=styles["BodyText"],
+        fontSize=7,
+        leading=9,
+    )
+
+    def para(value: Any, style: ParagraphStyle = normal_style) -> Paragraph:
+        safe_value = fmt(value)
+        safe_value = (
+            safe_value.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        return Paragraph(safe_value, style)
+
+    def make_key_value_table(rows: list[list[Any]]) -> Table:
+        table = Table(
+            [[para(left), para(right)] for left, right in rows],
+            colWidths=[145, 360],
+            hAlign="LEFT",
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E5E7EB")),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("PADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+
+        return table
+
+    def make_dark_header_table(
+        rows: list[list[Any]],
+        col_widths: list[int],
+    ) -> Table:
+        converted_rows = []
+
+        for row_index, row in enumerate(rows):
+            converted_row = []
+
+            for value in row:
+                converted_row.append(
+                    para(
+                        value,
+                        small_style if row_index > 0 else normal_style,
+                    )
+                )
+
+            converted_rows.append(converted_row)
+
+        table = Table(
+            converted_rows,
+            colWidths=col_widths,
+            hAlign="LEFT",
+            repeatRows=1,
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("PADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+
+        return table
 
     story = []
 
@@ -235,27 +314,14 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
     )
     story.append(Spacer(1, 12))
 
-    summary_table = Table(
+    summary_table = make_key_value_table(
         [
             ["Final Score", fmt(result.get("final_score"))],
             ["Risk Level", fmt(result.get("risk_level"))],
             ["Confidence", fmt(result.get("confidence"))],
             ["Processing Time", f"{fmt(result.get('processing_time_ms'))} ms"],
             ["Generated At", fmt(result.get("created_at"))],
-        ],
-        colWidths=[160, 340],
-    )
-
-    summary_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E5E7EB")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
+        ]
     )
 
     story.append(summary_table)
@@ -263,9 +329,7 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
     story.append(Paragraph("Explanation", heading_style))
     story.append(Paragraph(fmt(result.get("explanation")), normal_style))
 
-    story.append(Paragraph("File Information", heading_style))
-
-    file_table = Table(
+    file_table = make_key_value_table(
         [
             ["Filename", fmt(job.get("original_filename"))],
             ["Uploaded By", fmt(job.get("user_email"))],
@@ -274,31 +338,16 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
             ["File Size Bytes", fmt(job.get("file_size_bytes"))],
             ["Upload Status", fmt(job.get("upload_status"))],
             ["Job Status", fmt(job.get("job_status"))],
-        ],
-        colWidths=[160, 340],
+        ]
     )
 
-    file_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E5E7EB")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
-
-    story.append(file_table)
-
-    story.append(Paragraph("Model Predictions", heading_style))
+    story.append(KeepTogether([Paragraph("File Information", heading_style), file_table]))
 
     prediction_rows = [
         [
             "Model",
             "Version",
-            "Raw Score",
+            "Raw",
             "Calibrated",
             "Label",
             "Target",
@@ -317,33 +366,25 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
             ]
         )
 
-    prediction_table = Table(
+    prediction_table = make_dark_header_table(
         prediction_rows,
-        colWidths=[135, 60, 70, 70, 90, 60],
+        col_widths=[165, 75, 50, 70, 90, 55],
     )
 
-    prediction_table.setStyle(
-        TableStyle(
+    story.append(
+        KeepTogether(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 6),
+                Paragraph("Model Predictions", heading_style),
+                prediction_table,
             ]
         )
     )
-
-    story.append(prediction_table)
-
-    story.append(Paragraph("Forensic Signals", heading_style))
 
     signal_rows = [
         [
             "Type",
             "Signal",
-            "Contribution",
+            "Risk",
             "Severity",
             "Description",
         ]
@@ -358,54 +399,40 @@ def build_pdf_report(data: dict[str, Any]) -> BytesIO:
                 fmt(signal.get("signal_value")),
                 fmt(signal.get("risk_contribution")),
                 fmt(details.get("severity")),
-                Paragraph(fmt(details.get("description")), normal_style),
+                fmt(details.get("description")),
             ]
         )
 
-    signal_table = Table(
+    signal_table = make_dark_header_table(
         signal_rows,
-        colWidths=[70, 110, 80, 70, 170],
+        col_widths=[70, 115, 55, 65, 200],
     )
 
-    signal_table.setStyle(
-        TableStyle(
+    story.append(
+        KeepTogether(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 6),
+                Paragraph("Forensic Signals", heading_style),
+                signal_table,
             ]
         )
     )
 
-    story.append(signal_table)
-
-    story.append(Paragraph("Reference IDs", heading_style))
-
-    ids_table = Table(
+    ids_table = make_key_value_table(
         [
             ["Job ID", fmt(job.get("job_id"))],
             ["Upload ID", fmt(job.get("upload_id"))],
             ["Result ID", fmt(result.get("id"))],
-        ],
-        colWidths=[160, 340],
+        ]
     )
 
-    ids_table.setStyle(
-        TableStyle(
+    story.append(
+        KeepTogether(
             [
-                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#E5E7EB")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 7),
+                Paragraph("Reference IDs", heading_style),
+                ids_table,
             ]
         )
     )
-
-    story.append(ids_table)
 
     doc.build(story)
 

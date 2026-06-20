@@ -6,6 +6,27 @@ export type SampledFrameResult = {
   confidence: number;
 };
 
+export type ResultInterpretationTopSignal = {
+  signal_type?: string;
+  signal_name?: string;
+  score?: number;
+  severity?: string;
+  description?: string;
+};
+
+export type ResultInterpretation = {
+  verdict?: string;
+  risk_level?: string;
+  final_score?: number;
+  confidence?: number;
+  score_interpretation?: string;
+  recommended_action?: string;
+  limitations?: string[];
+  engine?: string;
+  human_summary?: string;
+  top_signals?: ResultInterpretationTopSignal[];
+};
+
 export type AnalysisJob = {
   job_id: string;
   job_status: string;
@@ -22,6 +43,15 @@ export type AnalysisJob = {
   uploaded_at: string;
 };
 
+export type AnalysisSignalSummaryItem = {
+  score: number;
+  severity: string;
+  description: string;
+  signal_name: string;
+  signal_type: string;
+  raw_data?: Record<string, unknown>;
+};
+
 export type AnalysisResult = {
   id: string;
   media_upload_id: string;
@@ -30,20 +60,20 @@ export type AnalysisResult = {
   risk_level: string;
   confidence: number;
   explanation: string;
+
   signals_summary: {
     summary?: string;
+
+    interpretation?: ResultInterpretation;
+
     prediction_count?: number;
     forensic_signal_count?: number;
+
     sampled_frames?: SampledFrameResult[];
-    signals?: Array<{
-      score: number;
-      severity: string;
-      description: string;
-      signal_name: string;
-      signal_type: string;
-      raw_data?: Record<string, unknown>;
-    }>;
+
+    signals?: AnalysisSignalSummaryItem[];
   };
+
   model_versions: {
     engine?: string;
     models?: Array<{
@@ -51,6 +81,7 @@ export type AnalysisResult = {
       model_version: string;
     }>;
   };
+
   processing_time_ms: number | null;
   created_at: string;
 };

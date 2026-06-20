@@ -433,6 +433,90 @@ export default function ResultClient() {
                   "Analysis result is not available yet."}
               </p>
             </div>
+            {data.result?.signals_summary?.interpretation && (
+  <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+    <p className="text-sm font-semibold text-slate-300">
+      Interpretation
+    </p>
+
+    <div className="mt-4 grid gap-4 md:grid-cols-2">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+        <p className="text-xs uppercase tracking-wide text-slate-500">
+          Score Meaning
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          {
+            data.result.signals_summary.interpretation
+              .score_interpretation
+          }
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+        <p className="text-xs uppercase tracking-wide text-slate-500">
+          Recommended Action
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          {
+            data.result.signals_summary.interpretation
+              .recommended_action
+          }
+        </p>
+      </div>
+    </div>
+
+    {data.result.signals_summary.interpretation.top_signals &&
+      data.result.signals_summary.interpretation.top_signals.length >
+        0 && (
+        <div className="mt-5">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            Top Contributing Signals
+          </p>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {data.result.signals_summary.interpretation.top_signals.map(
+              (signal) => (
+                <div
+                  key={`${signal.signal_type}-${signal.signal_name}`}
+                  className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"
+                >
+                  <p className="font-semibold text-slate-200">
+                    {signal.signal_name || signal.signal_type}
+                  </p>
+
+                  <p className="mt-2 text-2xl font-extrabold">
+                    {formatPercent(signal.score)}
+                  </p>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    Severity: {signal.severity || "N/A"}
+                  </p>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+    {data.result.signals_summary.interpretation.limitations &&
+      data.result.signals_summary.interpretation.limitations.length >
+        0 && (
+        <div className="mt-5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+          <p className="text-sm font-semibold text-yellow-100">
+            Limitations
+          </p>
+
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-yellow-100/90">
+            {data.result.signals_summary.interpretation.limitations.map(
+              (item) => (
+                <li key={item}>{item}</li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
+  </div>
+)}
 
             {!data.result && (
               <div className="mt-6 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-yellow-100">

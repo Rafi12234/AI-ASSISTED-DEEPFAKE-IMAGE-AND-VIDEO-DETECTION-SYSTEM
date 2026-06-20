@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 from PIL import Image, ImageFilter
+from app.services.explanation_builder import build_explanation_pack
 
 
 def clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
@@ -184,6 +185,16 @@ def analyze_image_bytes(
             },
         },
     ]
+    engine = "ai-service-foundation-v1"
+
+    explanation_pack = build_explanation_pack(
+        media_type="image",
+        final_score=final_score,
+        risk_level=risk_level,
+        confidence=confidence,
+        forensic_signals=forensic_signals,
+        engine=engine,
+    )
 
     model_predictions = [
         {
@@ -200,7 +211,7 @@ def analyze_image_bytes(
     processing_time_ms = int((time.perf_counter() - started_at) * 1000)
 
     return {
-        "engine": "ai-service-foundation-v1",
+        "engine": engine,
         "media_type": "image",
         "filename": filename,
         "mime_type": mime_type,
@@ -212,7 +223,7 @@ def analyze_image_bytes(
         "final_score": final_score,
         "risk_level": risk_level,
         "confidence": confidence,
-        "explanation": get_explanation(risk_level, final_score),
+        "explanation": explanation_pack["human_summary"],
         "processing_time_ms": processing_time_ms,
         "model_predictions": model_predictions,
         "forensic_signals": forensic_signals,
@@ -225,11 +236,12 @@ def analyze_image_bytes(
                 }
             ],
         },
-        "signals_summary": {
+                "signals_summary": {
             "summary": (
                 "Foundation image forensic analysis completed. "
                 "This is a real pixel-based service foundation, but not a trained deepfake model yet."
             ),
+            "interpretation": explanation_pack,
             "prediction_count": len(model_predictions),
             "forensic_signal_count": len(forensic_signals),
             "signals": forensic_signals,

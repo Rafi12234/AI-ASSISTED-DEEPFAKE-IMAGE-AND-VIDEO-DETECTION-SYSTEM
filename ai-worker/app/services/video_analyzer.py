@@ -16,6 +16,7 @@ from app.services.image_analyzer import (
     round_score,
     severity_from_score,
 )
+from app.services.explanation_builder import build_explanation_pack
 
 
 def frame_to_jpeg_bytes(frame_bgr: np.ndarray) -> bytes:
@@ -211,11 +212,21 @@ def analyze_video_bytes(
                 "inference_time_ms": int((time.perf_counter() - started_at) * 1000),
             }
         ]
+        engine = "ai-service-video-foundation-v1"
+
+        explanation_pack = build_explanation_pack(
+            media_type="video",
+            final_score=final_score,
+            risk_level=risk_level,
+            confidence=confidence,
+            forensic_signals=forensic_signals,
+            engine=engine,
+        )
 
         processing_time_ms = int((time.perf_counter() - started_at) * 1000)
 
         return {
-            "engine": "ai-service-video-foundation-v1",
+            "engine": engine,
             "media_type": "video",
             "filename": filename,
             "mime_type": mime_type,
@@ -231,10 +242,7 @@ def analyze_video_bytes(
             "final_score": final_score,
             "risk_level": risk_level,
             "confidence": confidence,
-            "explanation": (
-                get_explanation(risk_level, final_score)
-                + " This video result is based on sampled frame analysis, not a trained deepfake video model yet."
-            ),
+            "explanation": explanation_pack["human_summary"],
             "processing_time_ms": processing_time_ms,
             "model_predictions": model_predictions,
             "forensic_signals": forensic_signals,
@@ -247,11 +255,12 @@ def analyze_video_bytes(
                     }
                 ],
             },
-            "signals_summary": {
+                        "signals_summary": {
                 "summary": (
                     "Foundation video frame analysis completed. "
                     "The service sampled frames from the video and analyzed frame-level visual signals."
                 ),
+                "interpretation": explanation_pack,
                 "prediction_count": len(model_predictions),
                 "forensic_signal_count": len(forensic_signals),
                 "sampled_frames": frame_results,
