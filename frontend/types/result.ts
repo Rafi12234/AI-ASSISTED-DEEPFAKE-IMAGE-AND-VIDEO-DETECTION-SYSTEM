@@ -1,3 +1,11 @@
+export type SampledFrameResult = {
+  frame_number: number;
+  timestamp_seconds: number | null;
+  final_score: number;
+  risk_level: string;
+  confidence: number;
+};
+
 export type AnalysisJob = {
   job_id: string;
   job_status: string;
@@ -26,12 +34,14 @@ export type AnalysisResult = {
     summary?: string;
     prediction_count?: number;
     forensic_signal_count?: number;
+    sampled_frames?: SampledFrameResult[];
     signals?: Array<{
       score: number;
       severity: string;
       description: string;
       signal_name: string;
       signal_type: string;
+      raw_data?: Record<string, unknown>;
     }>;
   };
   model_versions: {

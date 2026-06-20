@@ -7,11 +7,13 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  BarChart3,
   Brain,
   CheckCircle2,
   Clock3,
   Download,
   FileImage,
+  FileVideo,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -19,7 +21,7 @@ import {
 
 import { getResultByJobId, getResultByUploadId } from "@/lib/results";
 import { downloadResultReportPdf } from "@/lib/reports";
-import type { AnalysisResultResponse } from "@/types/result";
+import type { AnalysisResultResponse, SampledFrameResult } from "@/types/result";
 
 const TOKEN_KEY = "deepfake_access_token";
 
@@ -29,6 +31,14 @@ function formatPercent(value: number | null | undefined) {
   }
 
   return `${Math.round(value * 100)}%`;
+}
+
+function formatDecimal(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "N/A";
+  }
+
+  return value.toFixed(4);
 }
 
 function formatDate(value: string | null | undefined) {
@@ -55,43 +65,41 @@ function formatFileSize(bytes: number | null | undefined) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function getRiskStyle(riskLevel?: string) {
+function getRiskLabel(riskLevel?: string) {
   switch (riskLevel) {
     case "likely_authentic":
-      return {
-        label: "Likely Authentic",
-        className:
-          "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-        icon: ShieldCheck,
-      };
+      return "Likely Authentic";
 
     case "uncertain":
-      return {
-        label: "Uncertain",
-        className: "border-yellow-500/40 bg-yellow-500/10 text-yellow-300",
-        icon: AlertTriangle,
-      };
+      return "Uncertain";
 
     case "suspicious":
-      return {
-        label: "Suspicious",
-        className: "border-orange-500/40 bg-orange-500/10 text-orange-300",
-        icon: ShieldAlert,
-      };
+      return "Suspicious";
 
     case "high_risk":
-      return {
-        label: "High Risk",
-        className: "border-red-500/40 bg-red-500/10 text-red-300",
-        icon: ShieldAlert,
-      };
+      return "High Risk";
 
     default:
-      return {
-        label: riskLevel || "Pending",
-        className: "border-slate-500/40 bg-slate-500/10 text-slate-300",
-        icon: Clock3,
-      };
+      return riskLevel || "Pending";
+  }
+}
+
+function getRiskClassName(riskLevel?: string) {
+  switch (riskLevel) {
+    case "likely_authentic":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+
+    case "uncertain":
+      return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+
+    case "suspicious":
+      return "border-orange-500/40 bg-orange-500/10 text-orange-300";
+
+    case "high_risk":
+      return "border-red-500/40 bg-red-500/10 text-red-300";
+
+    default:
+      return "border-slate-500/40 bg-slate-500/10 text-slate-300";
   }
 }
 
@@ -114,6 +122,47 @@ function getStatusStyle(status?: string) {
   }
 }
 
+function RiskIcon({ riskLevel, className }: { riskLevel?: string; className: string }) {
+  if (riskLevel === "likely_authentic") {
+    return <ShieldCheck className={className} />;
+  }
+
+  if (riskLevel === "uncertain") {
+    return <AlertTriangle className={className} />;
+  }
+
+  if (riskLevel === "suspicious" || riskLevel === "high_risk") {
+    return <ShieldAlert className={className} />;
+  }
+
+  return <Clock3 className={className} />;
+}
+
+function MediaIcon({ fileType, className }: { fileType?: string; className: string }) {
+  if (fileType === "video") {
+    return <FileVideo className={className} />;
+  }
+
+  return <FileImage className={className} />;
+}
+
+function getAverageFrameScore(frames: SampledFrameResult[]) {
+  if (frames.length === 0) {
+    return null;
+  }
+
+  const total = frames.reduce((sum, frame) => sum + frame.final_score, 0);
+  return total / frames.length;
+}
+
+function getMaxFrameScore(frames: SampledFrameResult[]) {
+  if (frames.length === 0) {
+    return null;
+  }
+
+  return Math.max(...frames.map((frame) => frame.final_score));
+}
+
 export default function ResultClient() {
   const searchParams = useSearchParams();
 
@@ -127,11 +176,19 @@ export default function ResultClient() {
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
 
-  const riskStyle = useMemo(() => {
-    return getRiskStyle(data?.result?.risk_level);
-  }, [data?.result?.risk_level]);
+  const sampledFrames = useMemo(() => {
+    return data?.result?.signals_summary?.sampled_frames || [];
+  }, [data?.result?.signals_summary?.sampled_frames]);
 
-  const RiskIcon = riskStyle.icon;
+  const averageFrameScore = useMemo(() => {
+    return getAverageFrameScore(sampledFrames);
+  }, [sampledFrames]);
+
+  const maxFrameScore = useMemo(() => {
+    return getMaxFrameScore(sampledFrames);
+  }, [sampledFrames]);
+
+  const isVideoResult = data?.job.file_type === "video" || sampledFrames.length > 0;
 
   const loadResult = useCallback(
     async (isRefresh = false) => {
@@ -288,7 +345,9 @@ export default function ResultClient() {
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Result details for your uploaded media.
+              {isVideoResult
+                ? "Video frame analysis result for your uploaded media."
+                : "Image analysis result for your uploaded media."}
             </p>
           </div>
 
@@ -330,10 +389,15 @@ export default function ResultClient() {
                 </p>
 
                 <div
-                  className={`mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${riskStyle.className}`}
+                  className={`mt-3 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold ${getRiskClassName(
+                    data.result?.risk_level
+                  )}`}
                 >
-                  <RiskIcon className="h-4 w-4" />
-                  {riskStyle.label}
+                  <RiskIcon
+                    riskLevel={data.result?.risk_level}
+                    className="h-4 w-4"
+                  />
+                  {getRiskLabel(data.result?.risk_level)}
                 </div>
               </div>
 
@@ -372,16 +436,16 @@ export default function ResultClient() {
 
             {!data.result && (
               <div className="mt-6 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-yellow-100">
-                This job is not completed yet. Run the worker and refresh this
-                page.
+                This job is not completed yet. Wait for the worker and refresh
+                this page.
               </div>
             )}
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
             <div className="flex items-center gap-3">
-              <FileImage className="h-5 w-5 text-slate-300" />
-              <h2 className="text-lg font-bold">File Information</h2>
+              <MediaIcon fileType={data.job.file_type} className="h-5 w-5 text-slate-300" />
+              <h2 className="text-lg font-bold">Media Information</h2>
             </div>
 
             <div className="mt-5 space-y-4 text-sm">
@@ -419,7 +483,7 @@ export default function ResultClient() {
           </div>
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-3">
+        <section className="mt-6 grid gap-6 lg:grid-cols-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
             <div className="flex items-center gap-3">
               <Activity className="h-5 w-5 text-slate-300" />
@@ -436,28 +500,9 @@ export default function ResultClient() {
               </span>
             </div>
 
-            <div className="mt-5 space-y-3 text-sm">
-              <div>
-                <p className="text-slate-500">Queued At</p>
-                <p className="text-slate-200">
-                  {formatDate(data.job.queued_at)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-slate-500">Started At</p>
-                <p className="text-slate-200">
-                  {formatDate(data.job.started_at)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-slate-500">Completed At</p>
-                <p className="text-slate-200">
-                  {formatDate(data.job.completed_at)}
-                </p>
-              </div>
-            </div>
+            <p className="mt-4 text-xs text-slate-500">
+              Completed: {formatDate(data.job.completed_at)}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
@@ -466,12 +511,11 @@ export default function ResultClient() {
               <h2 className="text-lg font-bold">Confidence</h2>
             </div>
 
-            <p className="mt-5 text-5xl font-extrabold">
+            <p className="mt-5 text-4xl font-extrabold">
               {formatPercent(data.result?.confidence)}
             </p>
 
             <p className="mt-3 text-sm text-slate-400">
-              Processing time:{" "}
               {data.result?.processing_time_ms
                 ? `${data.result.processing_time_ms} ms`
                 : "N/A"}
@@ -484,15 +528,118 @@ export default function ResultClient() {
               <h2 className="text-lg font-bold">Engine</h2>
             </div>
 
-            <p className="mt-5 text-lg font-semibold text-slate-200">
+            <p className="mt-5 break-words text-lg font-semibold text-slate-200">
               {data.result?.model_versions?.engine || "N/A"}
             </p>
 
             <p className="mt-3 text-sm text-slate-400">
-              This is currently a mock analysis engine.
+              Foundation analysis service.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="h-5 w-5 text-slate-300" />
+              <h2 className="text-lg font-bold">Frame Stats</h2>
+            </div>
+
+            <p className="mt-5 text-4xl font-extrabold">
+              {sampledFrames.length}
+            </p>
+
+            <p className="mt-3 text-sm text-slate-400">
+              sampled frames
             </p>
           </div>
         </section>
+
+        {isVideoResult && (
+          <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <h2 className="text-xl font-bold">Video Frame Analysis</h2>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
+                <p className="text-sm text-slate-500">Sampled Frames</p>
+                <p className="mt-2 text-3xl font-extrabold">
+                  {sampledFrames.length}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
+                <p className="text-sm text-slate-500">Average Frame Score</p>
+                <p className="mt-2 text-3xl font-extrabold">
+                  {formatPercent(averageFrameScore)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
+                <p className="text-sm text-slate-500">Max Frame Score</p>
+                <p className="mt-2 text-3xl font-extrabold">
+                  {formatPercent(maxFrameScore)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 overflow-x-auto">
+              <table className="w-full min-w-[760px] border-separate border-spacing-y-2 text-left text-sm">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="px-4 py-2">Frame</th>
+                    <th className="px-4 py-2">Timestamp</th>
+                    <th className="px-4 py-2">Score</th>
+                    <th className="px-4 py-2">Raw Score</th>
+                    <th className="px-4 py-2">Risk Level</th>
+                    <th className="px-4 py-2">Confidence</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {sampledFrames.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="rounded-xl bg-slate-950 px-4 py-4 text-slate-400"
+                      >
+                        No sampled frame data available.
+                      </td>
+                    </tr>
+                  ) : (
+                    sampledFrames.map((frame) => (
+                      <tr key={`${frame.frame_number}-${frame.timestamp_seconds}`} className="bg-slate-950/70">
+                        <td className="rounded-l-xl px-4 py-4 font-semibold text-slate-200">
+                          #{frame.frame_number}
+                        </td>
+                        <td className="px-4 py-4 text-slate-300">
+                          {frame.timestamp_seconds === null
+                            ? "N/A"
+                            : `${frame.timestamp_seconds}s`}
+                        </td>
+                        <td className="px-4 py-4 text-slate-300">
+                          {formatPercent(frame.final_score)}
+                        </td>
+                        <td className="px-4 py-4 text-slate-300">
+                          {formatDecimal(frame.final_score)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${getRiskClassName(
+                              frame.risk_level
+                            )}`}
+                          >
+                            {getRiskLabel(frame.risk_level)}
+                          </span>
+                        </td>
+                        <td className="rounded-r-xl px-4 py-4 text-slate-300">
+                          {formatPercent(frame.confidence)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <h2 className="text-xl font-bold">Model Predictions</h2>
@@ -628,4 +775,4 @@ export default function ResultClient() {
       </div>
     </main>
   );
-}
+}``
