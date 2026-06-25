@@ -22,6 +22,9 @@ import {
 import { getResultByJobId, getResultByUploadId } from "@/lib/results";
 import { downloadResultReportPdf } from "@/lib/reports";
 import type { AnalysisResultResponse, SampledFrameResult } from "@/types/result";
+import { getResultProductionEvidence } from "@/lib/aiModels";
+import type { ProductionEvidenceResponse } from "@/types/aiModels";
+import ProductionEvidenceSection from "./ProductionEvidenceSection";
 
 const TOKEN_KEY = "deepfake_access_token";
 
@@ -176,6 +179,9 @@ export default function ResultClient() {
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
 
+  const [productionEvidence, setProductionEvidence] =
+  useState<ProductionEvidenceResponse | null>(null);
+
   const sampledFrames = useMemo(() => {
     return data?.result?.signals_summary?.sampled_frames || [];
   }, [data?.result?.signals_summary?.sampled_frames]);
@@ -217,6 +223,20 @@ export default function ResultClient() {
           : await getResultByUploadId(uploadId as string, token);
 
         setData(result);
+        if (result.result?.id) {
+  try {
+    const evidence = await getResultProductionEvidence(
+      result.result.id,
+      token
+    );
+
+    setProductionEvidence(evidence);
+  } catch {
+    setProductionEvidence(null);
+  }
+} else {
+  setProductionEvidence(null);
+}
       } catch (err) {
         setPageError(
           err instanceof Error ? err.message : "Something went wrong."
@@ -724,7 +744,9 @@ export default function ResultClient() {
             </div>
           </section>
         )}
-
+        {productionEvidence && (
+  <ProductionEvidenceSection evidence={productionEvidence} />
+)}
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <h2 className="text-xl font-bold">Model Predictions</h2>
 

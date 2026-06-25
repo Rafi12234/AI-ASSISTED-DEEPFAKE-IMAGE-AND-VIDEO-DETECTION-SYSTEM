@@ -3,7 +3,6 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,9 +10,11 @@ from app.dependencies import get_current_user, get_db
 from app.models.core import User
 from app.services.model_registry import (
     list_ai_model_registry,
-    list_model_evidence_for_result,
-    row_to_dict,
     upsert_ai_model_registry,
+)
+from app.services.production_evidence import (
+    build_production_evidence_bundle,
+    get_result_context,
 )
 
 router = APIRouter(prefix="/ai-models", tags=["AI Models"])
@@ -75,51 +76,31 @@ async def sync_ai_model_registry(
 
 
 @router.get("/results/{result_id}/evidence")
-async def get_result_model_evidence(
+async def get_result_production_evidence(
     result_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    ownership_result = await db.execute(
-        text(
-            """
-            SELECT
-                ar.id AS result_id,
-                mu.user_id
-            FROM analysis_results ar
-            INNER JOIN analysis_jobs aj ON aj.id = ar.analysis_job_id
-            INNER JOIN media_uploads mu ON mu.id = aj.media_upload_id
-            WHERE ar.id = :result_id
-            LIMIT 1
-            """
-        ),
-        {
-            "result_id": result_id,
-        },
+    context = await get_result_context(
+        db=db,
+        result_id=result_id,
     )
 
-    row = ownership_result.first()
-
-    if row is None:
+    if context is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Result not found.",
         )
 
-    data = row_to_dict(row)
-
-    if current_user.role != "admin" and str(data["user_id"]) != str(current_user.id):
+    if current_user.role != "admin" and str(context["user_id"]) != str(current_user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have access to this result evidence.",
         )
 
-    evidence = await list_model_evidence_for_result(
+    evidence = await build_production_evidence_bundle(
         db=db,
         result_id=result_id,
     )
 
-    return {
-        "result_id": str(result_id),
-        "model_evidence": evidence,
-    }
+    return evidence
