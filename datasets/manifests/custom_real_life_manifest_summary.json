@@ -1,0 +1,26 @@
+{
+  "slug": "custom_real_life",
+  "dataset_name": "Custom Real-Life Dataset",
+  "dataset_root": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\custom_real_life",
+  "manifest_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\manifests\\custom_real_life_manifest.jsonl",
+  "summary_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\manifests\\custom_real_life_manifest_summary.json",
+  "compute_sha256": false,
+  "ratios": {
+    "train": 0.7,
+    "val": 0.15,
+    "test": 0.15
+  },
+  "counts": {
+    "total_files": 3,
+    "real_count": 2,
+    "fake_count": 1,
+    "unknown_count": 0,
+    "image_count": 3,
+    "video_count": 0,
+    "audio_count": 0,
+    "train_count": 2,
+    "val_count": 0,
+    "test_count": 1
+  },
+  "warnings": []
+}

@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 DatasetModality = Literal["image", "video", "audio", "audio_video", "multimodal"]
 DatasetStatus = Literal["recommended", "registered", "missing", "ready", "invalid"]
+DatasetSplit = Literal["train", "val", "test", "unknown"]
+DatasetLabel = Literal["real", "fake", "unknown"]
 
 
 class DatasetCatalogItem(BaseModel):
@@ -48,3 +50,46 @@ class LocalDatasetRegistryItem(BaseModel):
 class DatasetValidationRequest(BaseModel):
     slug: str
     local_path: str
+
+
+class DatasetManifestBuildRequest(BaseModel):
+    slug: str
+    local_path: str | None = None
+    output_name: str | None = None
+    compute_sha256: bool = False
+    max_files: int | None = None
+    train_ratio: float = Field(default=0.70, ge=0.1, le=0.95)
+    val_ratio: float = Field(default=0.15, ge=0.01, le=0.80)
+    test_ratio: float = Field(default=0.15, ge=0.01, le=0.80)
+
+
+class DatasetManifestSample(BaseModel):
+    sample_id: str
+    dataset_slug: str
+    file_path: str
+    relative_path: str
+    label: DatasetLabel
+    media_type: str
+    split: DatasetSplit
+    file_size_bytes: int
+    extension: str
+    sha256: str | None = None
+    source: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DatasetManifestSummary(BaseModel):
+    slug: str
+    manifest_path: str
+    summary_path: str
+    total_files: int
+    real_count: int
+    fake_count: int
+    unknown_count: int
+    image_count: int
+    video_count: int
+    audio_count: int
+    train_count: int
+    val_count: int
+    test_count: int
+    warnings: list[str] = Field(default_factory=list)

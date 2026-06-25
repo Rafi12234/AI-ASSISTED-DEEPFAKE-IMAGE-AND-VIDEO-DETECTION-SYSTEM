@@ -10,12 +10,18 @@ from app.datasets.local_registry import (
     validate_local_dataset,
 )
 from app.datasets.template_builder import create_custom_dataset_template
+from app.datasets.manifest_builder import (
+    build_manifest,
+    list_manifests,
+    read_manifest_preview,
+)
 from app.pipeline.model_registry import (
     get_active_model_names,
     get_model_registry_payload,
 )
 from app.pipeline.orchestrator import analyze_media_bytes
 from app.schemas.datasets import (
+    DatasetManifestBuildRequest,
     DatasetValidationRequest,
     LocalDatasetRegistrationRequest,
 )
@@ -140,6 +146,44 @@ async def create_custom_template():
         "message": "Custom real-life dataset template created successfully.",
         "paths": create_custom_dataset_template(),
     }
+@app.post("/datasets/build-manifest")
+async def build_dataset_manifest(request: DatasetManifestBuildRequest):
+    try:
+        summary = build_manifest(request)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "message": "Dataset manifest built successfully.",
+        "summary": summary,
+    }
+
+
+@app.get("/datasets/manifests")
+async def get_dataset_manifests():
+    return {
+        "manifest_root": str(ai_settings.dataset_root / "manifests"),
+        "manifests": list_manifests(),
+    }
+
+
+@app.get("/datasets/manifests/{slug}")
+async def get_dataset_manifest_preview(slug: str, limit: int = 20):
+    try:
+        preview = read_manifest_preview(
+            slug=slug,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return preview
 
 
 @app.post("/analyze/image")
