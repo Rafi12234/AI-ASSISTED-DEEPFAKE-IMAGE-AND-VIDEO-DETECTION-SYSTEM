@@ -102,3 +102,20 @@ class DatasetQualityCheckRequest(BaseModel):
     verify_images: bool = True
     min_total_for_training: int = 100
     min_per_class_for_training: int = 50
+
+
+class DatasetTrainingExportRequest(BaseModel):
+    slug: str
+    manifest_path: str | None = None
+    output_name: str | None = None
+
+    target_media_type: str | None = None
+    include_unknown_labels: bool = False
+    verify_files_exist: bool = True
+
+    train_ratio: float = Field(default=0.70, ge=0.1, le=0.95)
+    val_ratio: float = Field(default=0.15, ge=0.01, le=0.80)
+    test_ratio: float = Field(default=0.15, ge=0.01, le=0.80)
+
+    seed: int = 42
+    copy_files: bool = False

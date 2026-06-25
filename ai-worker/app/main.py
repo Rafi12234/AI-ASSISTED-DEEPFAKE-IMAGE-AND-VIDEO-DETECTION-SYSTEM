@@ -23,6 +23,7 @@ from app.pipeline.orchestrator import analyze_media_bytes
 from app.schemas.datasets import (
     DatasetManifestBuildRequest,
     DatasetQualityCheckRequest,
+    DatasetTrainingExportRequest,
     DatasetValidationRequest,
     LocalDatasetRegistrationRequest,
 )
@@ -32,6 +33,12 @@ from app.datasets.manifest_builder import (
     read_manifest_preview,
 )
 from app.datasets.quality_checker import check_manifest_quality
+
+from app.datasets.split_manager import (
+    export_training_split,
+    get_training_export_summary,
+    list_training_exports,
+)
 
 app = FastAPI(
     title=ai_settings.service_name,
@@ -205,6 +212,44 @@ async def get_dataset_quality(slug: str, verify_images: bool = True):
         slug=slug,
         verify_images=verify_images,
     )
+
+@app.post("/datasets/export-training-split")
+async def export_dataset_training_split(request: DatasetTrainingExportRequest):
+    try:
+        summary = export_training_split(request)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "message": "Training split export created successfully.",
+        "export": summary,
+    }
+
+
+@app.get("/datasets/training-exports")
+async def get_training_exports():
+    return {
+        "export_root": str(ai_settings.dataset_root / "processed" / "training_exports"),
+        "exports": list_training_exports(),
+    }
+
+
+@app.get("/datasets/training-exports/{output_name}")
+async def get_training_export(output_name: str):
+    try:
+        summary = get_training_export_summary(output_name)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "export": summary,
+    }
 
     return {
         "message": "Dataset quality check completed.",
