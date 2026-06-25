@@ -1,0 +1,7 @@
+file_path,label,media_type,source,consent,notes
+real/images/example_real.jpg,real,image,local_collection,yes,Replace this row
+fake/images/example_fake.jpg,fake,image,generated_or_verified_fake,yes,Replace this row
+real/videos/example_real.mp4,real,video,local_collection,yes,Replace this row
+fake/videos/example_fake.mp4,fake,video,generated_or_verified_fake,yes,Replace this row
+real/audio/example_real.wav,real,audio,local_collection,yes,Replace this row
+fake/audio/example_fake.wav,fake,audio,generated_or_verified_fake,yes,Replace this row

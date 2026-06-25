@@ -2,11 +2,23 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import ai_settings
+from app.datasets.catalog import get_recommended_datasets
+from app.datasets.local_registry import (
+    initialize_recommended_registry,
+    list_local_dataset_registry,
+    register_local_dataset,
+    validate_local_dataset,
+)
+from app.datasets.template_builder import create_custom_dataset_template
 from app.pipeline.model_registry import (
     get_active_model_names,
     get_model_registry_payload,
 )
 from app.pipeline.orchestrator import analyze_media_bytes
+from app.schemas.datasets import (
+    DatasetValidationRequest,
+    LocalDatasetRegistrationRequest,
+)
 
 
 app = FastAPI(
@@ -58,6 +70,75 @@ async def list_models():
     return {
         "active_models": get_active_model_names(),
         "registered_models": get_model_registry_payload(),
+    }
+
+
+@app.get("/datasets/recommended")
+async def list_recommended_datasets():
+    return {
+        "message": "Recommended real-world and benchmark datasets for production deepfake training.",
+        "recommended_order": [
+            "faceforensics_pp",
+            "celeb_df_v2",
+            "dfdc",
+            "deeperforensics_1",
+            "wilddeepfake",
+            "fakeavceleb",
+            "asvspoof_2021",
+            "av_deepfake1m",
+            "av_deepfake1m_pp",
+            "custom_real_life",
+        ],
+        "datasets": get_recommended_datasets(),
+    }
+
+
+@app.get("/datasets/registry")
+async def get_local_dataset_registry():
+    return {
+        "dataset_root": str(ai_settings.dataset_root),
+        "registry": list_local_dataset_registry(),
+    }
+
+
+@app.post("/datasets/initialize")
+async def initialize_dataset_registry():
+    return {
+        "message": "Dataset registry initialized successfully.",
+        "dataset_root": str(ai_settings.dataset_root),
+        "registry": initialize_recommended_registry(),
+    }
+
+
+@app.post("/datasets/register")
+async def register_dataset(request: LocalDatasetRegistrationRequest):
+    try:
+        dataset = register_local_dataset(request)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return {
+        "message": "Dataset registered successfully.",
+        "dataset": dataset,
+    }
+
+
+@app.post("/datasets/validate")
+async def validate_dataset(request: DatasetValidationRequest):
+    return {
+        "message": "Dataset validation completed.",
+        "validation": validate_local_dataset(request),
+    }
+
+
+@app.post("/datasets/custom-template")
+async def create_custom_template():
+    return {
+        "message": "Custom real-life dataset template created successfully.",
+        "paths": create_custom_dataset_template(),
     }
 
 
