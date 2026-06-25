@@ -1,0 +1,82 @@
+[
+  {
+    "slug": "faceforensics_pp",
+    "name": "FaceForensics++",
+    "modality": "video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\faceforensics_pp",
+    "enabled": true,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "celeb_df_v2",
+    "name": "Celeb-DF v2",
+    "modality": "video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\celeb_df_v2",
+    "enabled": true,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "dfdc",
+    "name": "Deepfake Detection Challenge Dataset",
+    "modality": "video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\dfdc",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "deeperforensics_1",
+    "name": "DeeperForensics-1.0",
+    "modality": "video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\deeperforensics_1",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "wilddeepfake",
+    "name": "WildDeepfake",
+    "modality": "video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\wilddeepfake",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "fakeavceleb",
+    "name": "FakeAVCeleb",
+    "modality": "audio_video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\fakeavceleb",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "asvspoof_2021",
+    "name": "ASVspoof 2021",
+    "modality": "audio",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\asvspoof_2021",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "av_deepfake1m",
+    "name": "AV-Deepfake1M",
+    "modality": "audio_video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\av_deepfake1m",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "av_deepfake1m_pp",
+    "name": "AV-Deepfake1M++",
+    "modality": "audio_video",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\raw\\av_deepfake1m_pp",
+    "enabled": false,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  },
+  {
+    "slug": "custom_real_life",
+    "name": "Custom Real-Life Dataset",
+    "modality": "multimodal",
+    "local_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\custom_real_life",
+    "enabled": true,
+    "notes": "Auto-created by Chunk 34 dataset registry."
+  }
+]
