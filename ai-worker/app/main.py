@@ -22,10 +22,16 @@ from app.pipeline.model_registry import (
 from app.pipeline.orchestrator import analyze_media_bytes
 from app.schemas.datasets import (
     DatasetManifestBuildRequest,
+    DatasetQualityCheckRequest,
     DatasetValidationRequest,
     LocalDatasetRegistrationRequest,
 )
-
+from app.datasets.manifest_builder import (
+    build_manifest,
+    list_manifests,
+    read_manifest_preview,
+)
+from app.datasets.quality_checker import check_manifest_quality
 
 app = FastAPI(
     title=ai_settings.service_name,
@@ -184,6 +190,26 @@ async def get_dataset_manifest_preview(slug: str, limit: int = 20):
         ) from exc
 
     return preview
+
+@app.post("/datasets/check-quality")
+async def check_dataset_quality(request: DatasetQualityCheckRequest):
+    return {
+        "message": "Dataset quality check completed.",
+        "quality": check_manifest_quality(request),
+    }
+
+
+@app.get("/datasets/quality/{slug}")
+async def get_dataset_quality(slug: str, verify_images: bool = True):
+    request = DatasetQualityCheckRequest(
+        slug=slug,
+        verify_images=verify_images,
+    )
+
+    return {
+        "message": "Dataset quality check completed.",
+        "quality": check_manifest_quality(request),
+    }
 
 
 @app.post("/analyze/image")

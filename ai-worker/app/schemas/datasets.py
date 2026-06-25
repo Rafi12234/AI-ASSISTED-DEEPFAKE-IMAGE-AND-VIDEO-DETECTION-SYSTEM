@@ -93,3 +93,12 @@ class DatasetManifestSummary(BaseModel):
     val_count: int
     test_count: int
     warnings: list[str] = Field(default_factory=list)
+
+
+class DatasetQualityCheckRequest(BaseModel):
+    slug: str
+    manifest_path: str | None = None
+    max_rows: int | None = None
+    verify_images: bool = True
+    min_total_for_training: int = 100
+    min_per_class_for_training: int = 50
