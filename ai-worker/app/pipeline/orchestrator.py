@@ -7,7 +7,13 @@ from app.detectors.heuristic_detector import (
     run_image_heuristic_detector,
     run_video_heuristic_detector,
 )
-from app.pipeline.result_builder import build_pipeline_result, to_legacy_api_response
+from app.pipeline.image_baseline_enhancer import (
+    enhance_image_result_with_face_crop_baseline,
+)
+from app.pipeline.result_builder import (
+    build_pipeline_result,
+    to_legacy_api_response,
+)
 
 
 def detect_media_type(*, mime_type: str, filename: str) -> str:
@@ -20,7 +26,7 @@ def detect_media_type(*, mime_type: str, filename: str) -> str:
     if lower_mime.startswith("video/"):
         return "video"
 
-    if lower_filename.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp")):
+    if lower_filename.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp", ".jfif")):
         return "image"
 
     if lower_filename.endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")):
@@ -48,6 +54,13 @@ def analyze_media_bytes(
             file_bytes=file_bytes,
             filename=filename,
             mime_type=mime_type,
+        )
+
+        raw_result = enhance_image_result_with_face_crop_baseline(
+            file_bytes=file_bytes,
+            filename=filename,
+            mime_type=mime_type,
+            raw_result=raw_result,
         )
 
     elif media_type == "video":
