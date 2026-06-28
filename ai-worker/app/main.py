@@ -65,7 +65,15 @@ from app.schemas.faces import (
     FaceCropQualityCheckRequest,
     FaceCropTrainingExportRequest,
 )
-
+from app.detectors.face_crop_baseline_detector import (
+    predict_face_crop_baseline,
+)
+from app.schemas.training import FaceCropBaselineTrainRequest
+from app.training.face_crop_baseline import (
+    get_face_crop_baseline_run,
+    list_face_crop_baseline_runs,
+    train_face_crop_baseline,
+)
 
 # ============================================================
 # FastAPI application
@@ -710,7 +718,100 @@ async def get_crop_training_export(
 # ============================================================
 # General analysis endpoints
 # ============================================================
+@app.post("/training/face-crop-baseline/train")
+async def train_face_crop_baseline_endpoint(
+    request: FaceCropBaselineTrainRequest,
+):
+    try:
+        result = train_face_crop_baseline(request)
 
+        return {
+            "message": "Face crop baseline model trained successfully.",
+            "training": result,
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Training failed: {exc}",
+        ) from exc
+
+
+@app.get("/training/face-crop-baseline/runs")
+async def get_face_crop_baseline_runs():
+    return {
+        "runs": list_face_crop_baseline_runs(),
+    }
+
+
+@app.get("/training/face-crop-baseline/runs/{run_name}")
+async def get_face_crop_baseline_run_endpoint(
+    run_name: str,
+):
+    try:
+        return {
+            "run": get_face_crop_baseline_run(run_name),
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@app.post("/models/face-crop-baseline/predict")
+async def predict_face_crop_baseline_endpoint(
+    file: UploadFile = File(...),
+    run_name: str | None = None,
+):
+    if (
+        not file.content_type
+        or not file.content_type.startswith("image/")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only image files are supported.",
+        )
+
+    file_bytes = await file.read()
+
+    try:
+        prediction = predict_face_crop_baseline(
+            file_bytes=file_bytes,
+            filename=file.filename or "face-crop.jpg",
+            run_name=run_name,
+        )
+
+        return {
+            "message": "Face crop baseline prediction completed.",
+            "prediction": prediction,
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    
 @app.post("/analyze/image")
 async def analyze_image(
     file: UploadFile = File(...),
