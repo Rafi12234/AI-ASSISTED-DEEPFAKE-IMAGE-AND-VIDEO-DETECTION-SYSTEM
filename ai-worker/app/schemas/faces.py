@@ -71,3 +71,20 @@ class DatasetFaceCropExportRequest(BaseModel):
     padding_ratio: float = 0.25
     min_quality_score: float = 0.0
     save_no_face_report: bool = True
+
+class FaceCropQualityCheckRequest(BaseModel):
+    output_name: str
+    min_width: int = 96
+    min_height: int = 96
+    min_quality_score: float = 0.2
+    verify_images: bool = True
+
+
+class FaceCropTrainingExportRequest(BaseModel):
+    crop_export_name: str
+    output_name: str | None = None
+    train_ratio: float = 0.70
+    val_ratio: float = 0.15
+    test_ratio: float = 0.15
+    seed: int = 42
+    copy_files: bool = False

@@ -1,0 +1,19 @@
+{
+  "slug": "custom_real_life",
+  "output_name": "custom_real_life_face_crops_v1",
+  "created_at": "2026-06-28T19:49:24.821961+00:00",
+  "source_manifest_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\manifests\\custom_real_life_manifest.jsonl",
+  "export_root": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\processed\\face_crops\\custom_real_life_face_crops_v1",
+  "crop_manifest_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\processed\\face_crops\\custom_real_life_face_crops_v1\\face_crops_manifest.jsonl",
+  "no_face_report_path": "D:\\All Projects\\Deepfake-Detection-System\\Deepfake-Detection-System\\datasets\\processed\\face_crops\\custom_real_life_face_crops_v1\\no_face_report.jsonl",
+  "total_manifest_rows": 4,
+  "processed_images": 4,
+  "skipped_rows": 0,
+  "images_with_faces": 2,
+  "images_without_faces": 2,
+  "saved_crop_count": 2,
+  "real_crop_count": 1,
+  "fake_crop_count": 1,
+  "warnings": [],
+  "status": "ready"
+}

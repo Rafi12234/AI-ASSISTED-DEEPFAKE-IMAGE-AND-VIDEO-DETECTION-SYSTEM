@@ -18,6 +18,17 @@ from app.datasets.local_registry import (
 from app.datasets.template_builder import (
     create_custom_dataset_template,
 )
+from app.datasets.manifest_builder import (
+    build_manifest,
+    list_manifests,
+    read_manifest_preview,
+)
+from app.datasets.quality_checker import check_manifest_quality
+from app.datasets.split_manager import (
+    export_training_split,
+    get_training_export_summary,
+    list_training_exports,
+)
 from app.faces.face_cropper import (
     crop_uploaded_image,
     export_dataset_face_crops,
@@ -35,10 +46,25 @@ from app.pipeline.model_registry import (
 )
 from app.pipeline.orchestrator import analyze_media_bytes
 from app.schemas.datasets import (
+    DatasetManifestBuildRequest,
+    DatasetQualityCheckRequest,
+    DatasetTrainingExportRequest,
     DatasetValidationRequest,
     LocalDatasetRegistrationRequest,
 )
 from app.schemas.faces import DatasetFaceCropExportRequest
+
+from app.faces.crop_quality import (
+    check_face_crop_quality,
+    export_face_crop_training_split,
+    get_face_crop_training_export_summary,
+    list_face_crop_training_exports,
+)
+from app.schemas.faces import (
+    DatasetFaceCropExportRequest,
+    FaceCropQualityCheckRequest,
+    FaceCropTrainingExportRequest,
+)
 
 
 # ============================================================
@@ -231,7 +257,124 @@ async def create_custom_template():
             detail=f"Custom dataset template creation failed: {exc}",
         ) from exc
 
+@app.post("/datasets/build-manifest")
+async def build_dataset_manifest(
+    request: DatasetManifestBuildRequest,
+):
+    try:
+        summary = build_manifest(request)
 
+        return {
+            "message": "Dataset manifest built successfully.",
+            "summary": summary,
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@app.get("/datasets/manifests")
+async def get_dataset_manifests():
+    return {
+        "manifest_root": str(ai_settings.dataset_root / "manifests"),
+        "manifests": list_manifests(),
+    }
+
+
+@app.get("/datasets/manifests/{slug}")
+async def get_dataset_manifest_preview(
+    slug: str,
+    limit: int = 20,
+):
+    try:
+        preview = read_manifest_preview(
+            slug=slug,
+            limit=limit,
+        )
+
+        return preview
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@app.post("/datasets/check-quality")
+async def check_dataset_quality(
+    request: DatasetQualityCheckRequest,
+):
+    return {
+        "message": "Dataset quality check completed.",
+        "quality": check_manifest_quality(request),
+    }
+
+
+@app.get("/datasets/quality/{slug}")
+async def get_dataset_quality(
+    slug: str,
+    verify_images: bool = True,
+):
+    request = DatasetQualityCheckRequest(
+        slug=slug,
+        verify_images=verify_images,
+    )
+
+    return {
+        "message": "Dataset quality check completed.",
+        "quality": check_manifest_quality(request),
+    }
+
+
+@app.post("/datasets/export-training-split")
+async def export_dataset_training_split(
+    request: DatasetTrainingExportRequest,
+):
+    try:
+        summary = export_training_split(request)
+
+        return {
+            "message": "Training split export created successfully.",
+            "export": summary,
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@app.get("/datasets/training-exports")
+async def get_training_exports():
+    return {
+        "export_root": str(
+            ai_settings.dataset_root
+            / "processed"
+            / "training_exports"
+        ),
+        "exports": list_training_exports(),
+    }
+
+
+@app.get("/datasets/training-exports/{output_name}")
+async def get_training_export(output_name: str):
+    try:
+        summary = get_training_export_summary(output_name)
+
+        return {
+            "export": summary,
+        }
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 # ============================================================
 # Face detection endpoints
 # ============================================================
@@ -470,7 +613,100 @@ async def get_dataset_crop_export(
             detail=f"Could not read face crop export: {exc}",
         ) from exc
 
+@app.post("/faces/check-crop-quality")
+async def check_crop_quality(
+    request: FaceCropQualityCheckRequest,
+):
+    try:
+        quality = check_face_crop_quality(request)
 
+        return {
+            "message": "Face crop quality check completed.",
+            "quality": quality,
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@app.get("/faces/crop-quality/{output_name}")
+async def get_crop_quality(
+    output_name: str,
+    min_quality_score: float = 0.2,
+):
+    request = FaceCropQualityCheckRequest(
+        output_name=output_name,
+        min_quality_score=min_quality_score,
+    )
+
+    return {
+        "message": "Face crop quality check completed.",
+        "quality": check_face_crop_quality(request),
+    }
+
+
+@app.post("/faces/export-crop-training-split")
+async def export_crop_training_split(
+    request: FaceCropTrainingExportRequest,
+):
+    try:
+        export = export_face_crop_training_split(request)
+
+        return {
+            "message": "Face crop training split export created.",
+            "export": export,
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@app.get("/faces/crop-training-exports")
+async def get_crop_training_exports():
+    return {
+        "export_root": str(
+            ai_settings.dataset_root
+            / "processed"
+            / "face_crop_training_exports"
+        ),
+        "exports": list_face_crop_training_exports(),
+    }
+
+
+@app.get("/faces/crop-training-exports/{output_name}")
+async def get_crop_training_export(
+    output_name: str,
+):
+    try:
+        export = get_face_crop_training_export_summary(output_name)
+
+        return {
+            "export": export,
+        }
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 # ============================================================
 # General analysis endpoints
 # ============================================================
