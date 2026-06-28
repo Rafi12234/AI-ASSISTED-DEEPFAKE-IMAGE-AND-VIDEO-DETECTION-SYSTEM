@@ -88,3 +88,22 @@ class FaceCropTrainingExportRequest(BaseModel):
     test_ratio: float = 0.15
     seed: int = 42
     copy_files: bool = False
+
+
+class FaceDetectorInfo(BaseModel):
+    detector_id: str
+    name: str
+    version: str
+    status: str
+    backend: str
+    supports_confidence: bool
+    supports_landmarks: bool
+    notes: str
+
+
+class AdvancedFaceDetectionSettings(BaseModel):
+    detector_id: str = "opencv_haar"
+    min_quality_score: float = 0.2
+    min_area_ratio: float = 0.005
+    max_faces: int = 10
+    remove_overlaps: bool = True

@@ -39,6 +39,7 @@ from app.faces.face_detector import (
     DETECTOR_NAME,
     DETECTOR_VERSION,
     detect_faces_from_image_bytes,
+    list_available_face_detectors,
 )
 from app.pipeline.model_registry import (
     get_active_model_names,
@@ -386,7 +387,16 @@ async def get_training_export(output_name: str):
 # ============================================================
 # Face detection endpoints
 # ============================================================
-
+@app.get("/faces/detectors")
+async def get_face_detectors():
+    return {
+        "active_detector": "opencv_haar",
+        "detectors": list_available_face_detectors(),
+        "production_recommendation": (
+            "Use OpenCV Haar only as a CPU fallback. "
+            "For production, upgrade to RetinaFace, SCRFD, YOLO-Face, or MediaPipe."
+        ),
+    }
 @app.get("/faces/health")
 async def face_detection_health():
     return {
@@ -445,7 +455,73 @@ async def detect_faces_image(
             detail=f"Face detection failed: {exc}",
         ) from exc
 
+@app.post("/faces/detect/advanced")
+async def detect_faces_advanced(
+    file: UploadFile = File(...),
+    detector_id: str = "opencv_haar",
+    min_quality_score: float = 0.2,
+    min_area_ratio: float = 0.005,
+    max_faces: int = 10,
+    remove_overlaps: bool = True,
+):
+    if (
+        not file.content_type
+        or not file.content_type.startswith("image/")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only image files are supported in this endpoint.",
+        )
 
+    if min_quality_score < 0 or min_quality_score > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="min_quality_score must be between 0 and 1.",
+        )
+
+    if min_area_ratio < 0 or min_area_ratio > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="min_area_ratio must be between 0 and 1.",
+        )
+
+    if max_faces < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="max_faces must be at least 1.",
+        )
+
+    file_bytes = await file.read()
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty.",
+        )
+
+    try:
+        return detect_faces_from_image_bytes(
+            file_bytes=file_bytes,
+            filename=file.filename or "uploaded-image",
+            mime_type=file.content_type,
+            detector_id=detector_id,
+            min_quality_score=min_quality_score,
+            min_area_ratio=min_area_ratio,
+            max_faces=max_faces,
+            remove_overlaps=remove_overlaps,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Advanced face detection failed: {exc}",
+        ) from exc
 # ============================================================
 # Face crop endpoints
 # ============================================================

@@ -66,6 +66,7 @@ def crop_faces_from_image_bytes(
     relative_base: Path,
     padding_ratio: float = 0.25,
     min_quality_score: float = 0.0,
+    min_area_ratio: float = 0.02,
     label: str | None = None,
     source_file_path: str | None = None,
 ) -> dict[str, Any]:
@@ -78,6 +79,11 @@ def crop_faces_from_image_bytes(
         file_bytes=file_bytes,
         filename=filename,
         mime_type=mime_type,
+        detector_id="opencv_haar",
+        min_quality_score=min_quality_score,
+        min_area_ratio=min_area_ratio,
+        max_faces=10,
+        remove_overlaps=True,
     )
 
     crops: list[dict[str, Any]] = []
