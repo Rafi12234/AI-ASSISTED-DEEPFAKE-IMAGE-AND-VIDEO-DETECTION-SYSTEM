@@ -108,21 +108,32 @@ def enhance_image_result_with_face_crop_baseline(
                 filename=crop_path.name,
                 run_name=None,
             )
-
             baseline_predictions.append(
-                {
-                    "face_id": crop.get("face_id"),
-                    "crop_path": str(crop_path),
-                    "quality_score": crop.get("quality_score"),
-                    "fake_probability": prediction["fake_probability"],
-                    "real_probability": prediction["real_probability"],
-                    "confidence": prediction["confidence"],
-                    "predicted_label": prediction["predicted_label"],
-                    "model_name": prediction["model_name"],
-                    "model_version": prediction["model_version"],
-                    "run_name": prediction["run_name"],
-                }
-            )
+        {
+        "face_id": crop.get("face_id"),
+        "crop_path": str(crop_path),
+        "quality_score": crop.get("quality_score"),
+
+        "bbox": {
+            "x": crop.get("x"),
+            "y": crop.get("y"),
+            "width": crop.get("width"),
+            "height": crop.get("height"),
+            "padded_x": crop.get("padded_x"),
+            "padded_y": crop.get("padded_y"),
+            "padded_width": crop.get("padded_width"),
+            "padded_height": crop.get("padded_height"),
+        },
+
+        "fake_probability": prediction["fake_probability"],
+        "real_probability": prediction["real_probability"],
+        "confidence": prediction["confidence"],
+        "predicted_label": prediction["predicted_label"],
+        "model_name": prediction["model_name"],
+        "model_version": prediction["model_version"],
+        "run_name": prediction["run_name"],
+        }
+    )
 
         if not baseline_predictions:
             warnings.append(
@@ -240,15 +251,20 @@ def enhance_image_result_with_face_crop_baseline(
         }
 
         signals_summary["face_evidence"] = [
-            {
-                "face_id": item.get("face_id"),
-                "face_score": item.get("fake_probability"),
-                "crop_path": item.get("crop_path"),
-                "quality_score": item.get("quality_score"),
-                "details": item,
-            }
-            for item in baseline_predictions
-        ]
+    {
+        "face_id": item.get("face_id"),
+        "bbox": item.get("bbox"),
+        "face_score": item.get("fake_probability"),
+        "detection_confidence": item.get("confidence"),
+        "crop_path": item.get("crop_path"),
+        "quality_score": item.get("quality_score"),
+        "model_name": item.get("model_name"),
+        "model_version": item.get("model_version"),
+        "predicted_label": item.get("predicted_label"),
+        "details": item,
+    }
+    for item in baseline_predictions
+]
 
         signals_summary["warnings"] = warnings
 
