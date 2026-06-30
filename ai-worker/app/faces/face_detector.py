@@ -259,7 +259,20 @@ def detect_faces_from_image_bytes(
         x, y, width, height = [int(value) for value in face]
 
         area_ratio = round((width * height) / image_area, 6)
-
+        # Reject likely false positives near image edge or too small for portrait analysis
+        edge_margin_x = int(image_width * 0.03)
+        edge_margin_y = int(image_height * 0.03)
+        
+        is_near_edge = (
+            x <= edge_margin_x
+            or y <= edge_margin_y
+            or (x + width) >= (image_width - edge_margin_x)
+            or (y + height) >= (image_height - edge_margin_y)
+        )
+        
+        if is_near_edge and area_ratio < 0.08:
+            continue
+        
         quality_score, quality_details = estimate_face_quality(
             gray_image=gray,
             x=x,

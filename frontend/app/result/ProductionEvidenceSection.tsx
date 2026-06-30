@@ -42,8 +42,10 @@ function getBadgeStyle(value?: string | null) {
 
 export default function ProductionEvidenceSection({
   evidence,
+  token,
 }: {
   evidence: ProductionEvidenceResponse;
+  token: string | null;
 }) {
   return (
     <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
@@ -52,7 +54,8 @@ export default function ProductionEvidenceSection({
         <div>
           <h2 className="text-xl font-bold">Production AI Evidence</h2>
           <p className="mt-1 text-sm text-slate-400">
-            Model-level, forensic-level, and future face/video/audio evidence.
+            Model-level, forensic-level, face-level, video-frame, and future
+            audio evidence.
           </p>
         </div>
       </div>
@@ -161,7 +164,9 @@ export default function ProductionEvidenceSection({
                       </span>
                     </td>
                     <td className="rounded-r-xl px-4 py-4 text-slate-300">
-                      {item.latency_ms === null ? "N/A" : `${item.latency_ms} ms`}
+                      {item.latency_ms === null
+                        ? "N/A"
+                        : `${item.latency_ms} ms`}
                     </td>
                   </tr>
                 ))
@@ -225,7 +230,7 @@ export default function ProductionEvidenceSection({
             {evidence.face_evidence.length}
           </p>
           <p className="mt-2 text-sm text-slate-500">
-            Will be populated after face detection chunks.
+            Face-level model prediction and crop evidence.
           </p>
         </div>
 
@@ -254,10 +259,15 @@ export default function ProductionEvidenceSection({
             Will be populated after audio/AV sync chunks.
           </p>
         </div>
-        {evidence.face_evidence.length > 0 && (
-  <FaceEvidenceSection faceEvidence={evidence.face_evidence} />
-)}
       </div>
+
+      {evidence.face_evidence.length > 0 && (
+        <FaceEvidenceSection
+          faceEvidence={evidence.face_evidence}
+          resultId={evidence.result_id}
+          token={token}
+        />
+      )}
     </section>
   );
 }

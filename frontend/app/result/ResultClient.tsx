@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Activity,
   AlertTriangle,
@@ -21,8 +27,11 @@ import {
 
 import { getResultByJobId, getResultByUploadId } from "@/lib/results";
 import { downloadResultReportPdf } from "@/lib/reports";
-import type { AnalysisResultResponse, SampledFrameResult } from "@/types/result";
 import { getResultProductionEvidence } from "@/lib/aiModels";
+import type {
+  AnalysisResultResponse,
+  SampledFrameResult,
+} from "@/types/result";
 import type { ProductionEvidenceResponse } from "@/types/aiModels";
 import ProductionEvidenceSection from "./ProductionEvidenceSection";
 
@@ -53,7 +62,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 function formatFileSize(bytes: number | null | undefined) {
-  if (!bytes) {
+  if (bytes === null || bytes === undefined) {
     return "N/A";
   }
 
@@ -66,6 +75,22 @@ function formatFileSize(bytes: number | null | undefined) {
   }
 
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function getReadableError(value: unknown) {
+  if (value instanceof Error) {
+    return value.message;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return "Something went wrong.";
 }
 
 function getRiskLabel(riskLevel?: string) {
@@ -125,7 +150,13 @@ function getStatusStyle(status?: string) {
   }
 }
 
-function RiskIcon({ riskLevel, className }: { riskLevel?: string; className: string }) {
+function RiskIcon({
+  riskLevel,
+  className,
+}: {
+  riskLevel?: string;
+  className: string;
+}) {
   if (riskLevel === "likely_authentic") {
     return <ShieldCheck className={className} />;
   }
@@ -141,7 +172,13 @@ function RiskIcon({ riskLevel, className }: { riskLevel?: string; className: str
   return <Clock3 className={className} />;
 }
 
-function MediaIcon({ fileType, className }: { fileType?: string; className: string }) {
+function MediaIcon({
+  fileType,
+  className,
+}: {
+  fileType?: string;
+  className: string;
+}) {
   if (fileType === "video") {
     return <FileVideo className={className} />;
   }
@@ -169,18 +206,37 @@ function getMaxFrameScore(frames: SampledFrameResult[]) {
 export default function ResultClient() {
   const searchParams = useSearchParams();
 
-  const jobId = searchParams.get("job_id");
-  const uploadId = searchParams.get("upload_id");
+  const jobId = searchParams.get("job_id") || searchParams.get("jobId");
+  const uploadId = searchParams.get("upload_id") || searchParams.get("uploadId");
 
+  const [token, setToken] = useState<string | null>(null);
   const [data, setData] = useState<AnalysisResultResponse | null>(null);
+  const [productionEvidence, setProductionEvidence] =
+    useState<ProductionEvidenceResponse | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
 
-  const [productionEvidence, setProductionEvidence] =
-  useState<ProductionEvidenceResponse | null>(null);
+  const [pollTick, setPollTick] = useState(0);
+  const pollTimeoutRef = useRef<number | null>(null);
+
+  const clearPollTimeout = useCallback(() => {
+    if (pollTimeoutRef.current !== null) {
+      window.clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleNextPoll = useCallback(() => {
+    clearPollTimeout();
+
+    pollTimeoutRef.current = window.setTimeout(() => {
+      setPollTick((current) => current + 1);
+    }, 3000);
+  }, [clearPollTimeout]);
 
   const sampledFrames = useMemo(() => {
     return data?.result?.signals_summary?.sampled_frames || [];
@@ -194,7 +250,8 @@ export default function ResultClient() {
     return getMaxFrameScore(sampledFrames);
   }, [sampledFrames]);
 
-  const isVideoResult = data?.job.file_type === "video" || sampledFrames.length > 0;
+  const isVideoResult =
+    data?.job.file_type === "video" || sampledFrames.length > 0;
 
   const loadResult = useCallback(
     async (isRefresh = false) => {
@@ -208,46 +265,73 @@ export default function ResultClient() {
           setLoading(true);
         }
 
-        const token = localStorage.getItem(TOKEN_KEY);
+        const storedToken = localStorage.getItem(TOKEN_KEY);
 
-        if (!token) {
+        if (!storedToken) {
           throw new Error("You are not logged in. Please login first.");
         }
+
+        setToken(storedToken);
 
         if (!jobId && !uploadId) {
           throw new Error("No job_id or upload_id found in the URL.");
         }
 
         const result = jobId
-          ? await getResultByJobId(jobId, token)
-          : await getResultByUploadId(uploadId as string, token);
+          ? await getResultByJobId(jobId, storedToken)
+          : await getResultByUploadId(uploadId as string, storedToken);
 
         setData(result);
-        if (result.result?.id) {
-  try {
-    const evidence = await getResultProductionEvidence(
-      result.result.id,
-      token
-    );
 
-    setProductionEvidence(evidence);
-  } catch {
-    setProductionEvidence(null);
-  }
-} else {
-  setProductionEvidence(null);
-}
+        if (result.result?.id) {
+          try {
+            const evidence = await getResultProductionEvidence(
+              result.result.id,
+              storedToken
+            );
+
+            setProductionEvidence(evidence);
+          } catch {
+            setProductionEvidence(null);
+          }
+        } else {
+          setProductionEvidence(null);
+        }
+
+        if (
+          result.job.job_status === "queued" ||
+          result.job.job_status === "processing"
+        ) {
+          scheduleNextPoll();
+        } else {
+          clearPollTimeout();
+        }
       } catch (err) {
-        setPageError(
-          err instanceof Error ? err.message : "Something went wrong."
-        );
+        clearPollTimeout();
+        setPageError(getReadableError(err));
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [jobId, uploadId]
+    [jobId, uploadId, scheduleNextPoll, clearPollTimeout]
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadResult(false);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [loadResult, pollTick]);
+
+  useEffect(() => {
+    return () => {
+      clearPollTimeout();
+    };
+  }, [clearPollTimeout]);
 
   async function handleDownloadPdf() {
     try {
@@ -263,31 +347,21 @@ export default function ResultClient() {
         );
       }
 
-      const token = localStorage.getItem(TOKEN_KEY);
+      const storedToken = token || localStorage.getItem(TOKEN_KEY);
 
-      if (!token) {
+      if (!storedToken) {
         throw new Error("You are not logged in. Please login first.");
       }
 
       setDownloadingPdf(true);
 
-      await downloadResultReportPdf(data.job.job_id, token);
+      await downloadResultReportPdf(data.job.job_id, storedToken);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "PDF download failed.");
+      setActionError(getReadableError(err));
     } finally {
       setDownloadingPdf(false);
     }
   }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadResult(false);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [loadResult]);
 
   if (loading) {
     return (
@@ -320,7 +394,10 @@ export default function ResultClient() {
             <h1 className="text-2xl font-bold text-red-200">
               Could not load result
             </h1>
-            <p className="mt-3 text-red-100">{pageError}</p>
+
+            <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-red-100">
+              {pageError}
+            </pre>
 
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -453,90 +530,91 @@ export default function ResultClient() {
                   "Analysis result is not available yet."}
               </p>
             </div>
+
             {data.result?.signals_summary?.interpretation && (
-  <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-    <p className="text-sm font-semibold text-slate-300">
-      Interpretation
-    </p>
+              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+                <p className="text-sm font-semibold text-slate-300">
+                  Interpretation
+                </p>
 
-    <div className="mt-4 grid gap-4 md:grid-cols-2">
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500">
-          Score Meaning
-        </p>
-        <p className="mt-2 text-sm leading-6 text-slate-300">
-          {
-            data.result.signals_summary.interpretation
-              .score_interpretation
-          }
-        </p>
-      </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Score Meaning
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      {
+                        data.result.signals_summary.interpretation
+                          .score_interpretation
+                      }
+                    </p>
+                  </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500">
-          Recommended Action
-        </p>
-        <p className="mt-2 text-sm leading-6 text-slate-300">
-          {
-            data.result.signals_summary.interpretation
-              .recommended_action
-          }
-        </p>
-      </div>
-    </div>
-
-    {data.result.signals_summary.interpretation.top_signals &&
-      data.result.signals_summary.interpretation.top_signals.length >
-        0 && (
-        <div className="mt-5">
-          <p className="text-xs uppercase tracking-wide text-slate-500">
-            Top Contributing Signals
-          </p>
-
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            {data.result.signals_summary.interpretation.top_signals.map(
-              (signal) => (
-                <div
-                  key={`${signal.signal_type}-${signal.signal_name}`}
-                  className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"
-                >
-                  <p className="font-semibold text-slate-200">
-                    {signal.signal_name || signal.signal_type}
-                  </p>
-
-                  <p className="mt-2 text-2xl font-extrabold">
-                    {formatPercent(signal.score)}
-                  </p>
-
-                  <p className="mt-2 text-xs text-slate-500">
-                    Severity: {signal.severity || "N/A"}
-                  </p>
+                  <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Recommended Action
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-300">
+                      {
+                        data.result.signals_summary.interpretation
+                          .recommended_action
+                      }
+                    </p>
+                  </div>
                 </div>
-              )
-            )}
-          </div>
-        </div>
-      )}
 
-    {data.result.signals_summary.interpretation.limitations &&
-      data.result.signals_summary.interpretation.limitations.length >
-        0 && (
-        <div className="mt-5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-          <p className="text-sm font-semibold text-yellow-100">
-            Limitations
-          </p>
+                {data.result.signals_summary.interpretation.top_signals &&
+                  data.result.signals_summary.interpretation.top_signals
+                    .length > 0 && (
+                    <div className="mt-5">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Top Contributing Signals
+                      </p>
 
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-yellow-100/90">
-            {data.result.signals_summary.interpretation.limitations.map(
-              (item) => (
-                <li key={item}>{item}</li>
-              )
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        {data.result.signals_summary.interpretation.top_signals.map(
+                          (signal) => (
+                            <div
+                              key={`${signal.signal_type}-${signal.signal_name}`}
+                              className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"
+                            >
+                              <p className="font-semibold text-slate-200">
+                                {signal.signal_name || signal.signal_type}
+                              </p>
+
+                              <p className="mt-2 text-2xl font-extrabold">
+                                {formatPercent(signal.score)}
+                              </p>
+
+                              <p className="mt-2 text-xs text-slate-500">
+                                Severity: {signal.severity || "N/A"}
+                              </p>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                {data.result.signals_summary.interpretation.limitations &&
+                  data.result.signals_summary.interpretation.limitations
+                    .length > 0 && (
+                    <div className="mt-5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+                      <p className="text-sm font-semibold text-yellow-100">
+                        Limitations
+                      </p>
+
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-yellow-100/90">
+                        {data.result.signals_summary.interpretation.limitations.map(
+                          (item) => (
+                            <li key={item}>{item}</li>
+                          )
+                        )}
+                      </ul>
+                    </div>
+                  )}
+              </div>
             )}
-          </ul>
-        </div>
-      )}
-  </div>
-)}
 
             {!data.result && (
               <div className="mt-6 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-yellow-100">
@@ -548,7 +626,10 @@ export default function ResultClient() {
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
             <div className="flex items-center gap-3">
-              <MediaIcon fileType={data.job.file_type} className="h-5 w-5 text-slate-300" />
+              <MediaIcon
+                fileType={data.job.file_type}
+                className="h-5 w-5 text-slate-300"
+              />
               <h2 className="text-lg font-bold">Media Information</h2>
             </div>
 
@@ -651,9 +732,7 @@ export default function ResultClient() {
               {sampledFrames.length}
             </p>
 
-            <p className="mt-3 text-sm text-slate-400">
-              sampled frames
-            </p>
+            <p className="mt-3 text-sm text-slate-400">sampled frames</p>
           </div>
         </section>
 
@@ -709,7 +788,10 @@ export default function ResultClient() {
                     </tr>
                   ) : (
                     sampledFrames.map((frame) => (
-                      <tr key={`${frame.frame_number}-${frame.timestamp_seconds}`} className="bg-slate-950/70">
+                      <tr
+                        key={`${frame.frame_number}-${frame.timestamp_seconds}`}
+                        className="bg-slate-950/70"
+                      >
                         <td className="rounded-l-xl px-4 py-4 font-semibold text-slate-200">
                           #{frame.frame_number}
                         </td>
@@ -744,9 +826,14 @@ export default function ResultClient() {
             </div>
           </section>
         )}
+
         {productionEvidence && (
-  <ProductionEvidenceSection evidence={productionEvidence} />
-)}
+          <ProductionEvidenceSection
+            evidence={productionEvidence}
+            token={token}
+          />
+        )}
+
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <h2 className="text-xl font-bold">Model Predictions</h2>
 
@@ -881,4 +968,4 @@ export default function ResultClient() {
       </div>
     </main>
   );
-}``
+}

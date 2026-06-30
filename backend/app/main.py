@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import ai_models, admin, auth, dashboard, health, queue_dev, reports, results, storage_dev, system, uploads, validation_dev
+from app.routers import admin, ai_models, auth, dashboard, face_crops, health, queue_dev, reports, results, storage_dev, system, uploads, validation_dev
 settings = get_settings()
 
 app = FastAPI(
@@ -82,5 +82,9 @@ app.include_router(
 )
 app.include_router(
     ai_models.router,
+    prefix="/api",
+)
+app.include_router(
+    face_crops.router,
     prefix="/api",
 )
