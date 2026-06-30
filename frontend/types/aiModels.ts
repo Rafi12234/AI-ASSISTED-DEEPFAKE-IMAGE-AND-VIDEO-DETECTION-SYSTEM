@@ -25,6 +25,31 @@ export type ProductionForensicEvidence = {
   created_at: string | null;
 };
 
+export type ProductionFaceEvidence = {
+  face_id: string;
+  bbox?: number[] | {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    padded_x?: number;
+    padded_y?: number;
+    padded_width?: number;
+    padded_height?: number;
+  } | null;
+  detection_confidence?: number | null;
+  face_score?: number | null;
+  frame_number?: number | null;
+  timestamp_seconds?: number | null;
+  crop_path?: string | null;
+  heatmap_path?: string | null;
+  quality_score?: number | null;
+  model_name?: string | null;
+  model_version?: string | null;
+  predicted_label?: string | null;
+  details?: Record<string, unknown>;
+};
+
 export type ProductionEvidenceResponse = {
   result_id: string;
   job_id: string;
@@ -66,13 +91,15 @@ export type ProductionEvidenceResponse = {
     media_type?: string;
     model_evidence_count?: number;
     forensic_evidence_count?: number;
+    face_evidence_count?: number;
+    frame_evidence_count?: number;
     note?: string;
   };
 
   model_evidence: ProductionModelEvidence[];
   forensic_evidence: ProductionForensicEvidence[];
 
-  face_evidence: Array<Record<string, unknown>>;
+  face_evidence: ProductionFaceEvidence[];
   frame_evidence: Array<Record<string, unknown>>;
   audio_evidence: Record<string, unknown> | null;
 

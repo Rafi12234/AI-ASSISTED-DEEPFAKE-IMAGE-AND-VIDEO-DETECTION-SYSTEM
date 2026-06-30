@@ -3,6 +3,7 @@
 import { Brain, Cpu, Eye, Fingerprint, Layers3 } from "lucide-react";
 
 import type { ProductionEvidenceResponse } from "@/types/aiModels";
+import FaceEvidenceSection from "./FaceEvidenceSection";
 
 function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) {
@@ -253,6 +254,9 @@ export default function ProductionEvidenceSection({
             Will be populated after audio/AV sync chunks.
           </p>
         </div>
+        {evidence.face_evidence.length > 0 && (
+  <FaceEvidenceSection faceEvidence={evidence.face_evidence} />
+)}
       </div>
     </section>
   );
